@@ -24,6 +24,7 @@ export default function App() {
     if (!moodInput.trim()) return setError('Please describe your mood')
 
     setLoading(true)
+    setShowResults(true)
     setError('')
 
     try {
@@ -40,9 +41,9 @@ export default function App() {
       })
       
       setSession(response.data)
-      setShowResults(true)
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to generate mix')
+      setShowResults(false)
     } finally {
       setLoading(false)
       setLoadingStatus('')
@@ -91,47 +92,59 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden">
-        {/* Input Form */}
-        {!showResults && !loading && (
-          <div className="h-full flex items-center justify-center p-6">
-            <form onSubmit={handleGenerateMix} className="w-full max-w-xl space-y-6">
-              <div className="text-center mb-8">
-                <h1 className="text-3xl font-semibold text-[#f5f5f5] mb-2">Create your perfect mix</h1>
-                <p className="text-[#707070] text-base">Paste a playlist, describe your mood, get personalized recommendations</p>
-              </div>
+      {/* Main Content - Split View */}
+      <main className="flex-1 overflow-hidden flex">
+        {/* Input Panel */}
+        <div 
+          className={`transition-all duration-700 ease-in-out flex-shrink-0 overflow-hidden ${
+            showResults 
+              ? 'w-[400px] border-r border-[#404040]/20' 
+              : 'w-full'
+          }`}
+        >
+          <div className={`h-full flex items-center transition-all duration-700 ease-in-out ${
+            showResults ? 'justify-start px-6' : 'justify-center p-6'
+          }`}>
+            <form onSubmit={handleGenerateMix} className={`space-y-5 transition-all duration-700 ease-in-out ${
+              showResults ? 'w-full max-w-none' : 'w-full max-w-xl'
+            }`}>
+              {!showResults && (
+                <div className="text-center mb-8">
+                  <h1 className="text-3xl font-semibold text-[#f5f5f5] mb-2">Create your perfect mix</h1>
+                  <p className="text-[#707070] text-base">Paste a playlist, describe your mood, get personalized recommendations</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
-                  <Music2 className="w-4 h-4 text-[#3b82f6]" /> Spotify Playlist URL
+                  <Music2 className="w-4 h-4 text-[#3b82f6]" /> Playlist URL
                 </label>
                 <input
                   type="text"
                   value={playlistUrl}
                   onChange={(e) => setPlaylistUrl(e.target.value)}
                   placeholder="https://open.spotify.com/playlist/..."
-                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#3b82f6]/50 focus:outline-none transition-colors"
+                  className="w-full rounded-xl px-4 py-3 text-sm bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#3b82f6]/50 focus:outline-none transition-colors"
                 />
               </div>
 
               <div className="space-y-2">
                 <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-[#FB7185]" /> Describe your vibe
+                  <Zap className="w-4 h-4 text-[#FB7185]" /> Your vibe
                 </label>
                 <textarea
                   value={moodInput}
                   onChange={(e) => setMoodInput(e.target.value)}
                   placeholder="e.g., feeling chill and want something relaxing..."
-                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#FB7185]/50 focus:outline-none resize-none h-24 transition-colors"
+                  className="w-full rounded-xl px-4 py-3 text-sm bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#FB7185]/50 focus:outline-none resize-none h-20 transition-colors"
                 />
-                <div className="flex gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-2">
                   {['energetic', 'chill', 'focus', 'melancholic'].map((mood) => (
                     <button
                       key={mood}
                       type="button"
                       onClick={() => setMoodInput(mood)}
-                      className={`text-sm px-4 py-2 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#FB7185]/10 border-[#FB7185]/30 text-[#FB7185]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#FB7185]/10 border-[#FB7185]/30 text-[#FB7185]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
                     >
                       {mood}
                     </button>
@@ -149,9 +162,9 @@ export default function App() {
                       key={d}
                       type="button"
                       onClick={() => setDuration(d)}
-                      className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${duration === d ? 'bg-[#3b82f6]/10 text-[#3b82f6] border border-[#3b82f6]/30' : 'bg-[#0f0f0f] text-[#707070] border border-[#404040]/30 hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-colors ${duration === d ? 'bg-[#3b82f6]/10 text-[#3b82f6] border border-[#3b82f6]/30' : 'bg-[#0f0f0f] text-[#707070] border border-[#404040]/30 hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
                     >
-                      {d} min
+                      {d}m
                     </button>
                   ))}
                 </div>
@@ -165,81 +178,102 @@ export default function App() {
 
               <button
                 type="submit"
-                disabled={!playlistUrl.trim() || !moodInput.trim()}
+                disabled={!playlistUrl.trim() || !moodInput.trim() || loading}
                 className="w-full bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 disabled:bg-[#0f0f0f] disabled:text-[#5a5a5a] text-[#3b82f6] disabled:border-[#404040]/20 font-medium py-4 rounded-xl flex items-center justify-center gap-3 text-base border border-[#3b82f6]/30 hover:border-[#3b82f6]/50 transition-colors"
               >
-                <Send className="w-5 h-5" /> Generate Mix
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" /> {showResults ? 'Regenerate Mix' : 'Generate Mix'}
+                  </>
+                )}
               </button>
               
-              <p className="text-center text-[#5a5a5a] text-sm">No login required · Works with public playlists only</p>
+              {!showResults && (
+                <p className="text-center text-[#5a5a5a] text-sm">No login required · Works with public playlists only</p>
+              )}
             </form>
           </div>
-        )}
+        </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="h-full flex flex-col items-center justify-center">
-            <Loader2 className="w-12 h-12 text-[#3b82f6] animate-spin mb-4" />
-            <p className="text-[#707070] text-lg">{loadingStatus}</p>
-          </div>
-        )}
-
-        {/* Results */}
-        {showResults && session && (
-          <div className="h-full flex flex-col p-4 max-w-4xl mx-auto">
-            {/* Stats Row */}
-            <div className="flex-shrink-0 flex items-center justify-between mb-3 px-1">
-              <div className="flex items-center gap-5 text-sm">
-                <span className="flex items-center gap-2 text-[#707070]">
-                  <ListMusic className="w-4 h-4 text-[#3b82f6]" /> 
-                  <span className="text-[#f5f5f5]">{metrics.count}</span> tracks
-                </span>
-                <span className="flex items-center gap-2 text-[#707070]">
-                  <Clock className="w-4 h-4 text-[#FB7185]" /> 
-                  <span className="text-[#f5f5f5]">{metrics.duration}</span> min
-                </span>
-                <span className="flex items-center gap-2 text-[#707070]">
-                  <Zap className="w-4 h-4 text-[#9a9a9a]" /> 
-                  <span className="text-[#f5f5f5]">{metrics.score}%</span> match
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => copyToClipboard('names')} className="text-sm px-4 py-2 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#f5f5f5] hover:border-[#707070]/50 flex items-center gap-2 transition-colors">
-                  {copied === 'names' ? <Check className="w-4 h-4 text-[#3b82f6]" /> : <Copy className="w-4 h-4" />} Names
-                </button>
-                <button onClick={() => copyToClipboard('uris')} className="text-sm px-4 py-2 rounded-lg bg-[#3b82f6]/10 border border-[#3b82f6]/30 text-[#3b82f6] hover:bg-[#3b82f6]/20 flex items-center gap-2 transition-colors">
-                  {copied === 'uris' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} URIs
-                </button>
-              </div>
-            </div>
-
-            {/* Track List */}
-            <div className="flex-1 overflow-y-auto rounded-xl bg-[#0f0f0f]/95 border border-[#404040]/20">
-              {session.recommendations?.map((track, i) => (
-                <div key={track.trackId || i} className="flex items-center gap-4 px-4 py-3 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors group">
-                  <span className="w-6 text-center text-[#5a5a5a] text-sm">{i + 1}</span>
-                  {track.albumImage ? (
-                    <img src={track.albumImage} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-[#141414] flex items-center justify-center">
-                      <Music2 className="w-4 h-4 text-[#5a5a5a]" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[#f5f5f5] text-sm truncate">{track.name}</p>
-                    <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
-                  </div>
-                  <span className="text-xs text-[#3b82f6] bg-[#3b82f6]/10 px-2.5 py-1 rounded-lg border border-[#3b82f6]/20">{track.moodScore || 0}%</span>
-                  {track.externalUrl && (
-                    <a href={track.externalUrl} target="_blank" rel="noopener noreferrer" className="text-[#5a5a5a] hover:text-[#3b82f6] transition-colors opacity-0 group-hover:opacity-100">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
+        {/* Results Panel */}
+        <div 
+          className={`transition-all duration-700 ease-in-out overflow-hidden ${
+            showResults ? 'flex-1 opacity-100' : 'w-0 opacity-0'
+          }`}
+        >
+          {showResults && (
+            <div className="h-full flex flex-col p-4">
+              {/* Loading State */}
+              {loading && (
+                <div className="h-full flex flex-col items-center justify-center">
+                  <Loader2 className="w-12 h-12 text-[#3b82f6] animate-spin mb-4" />
+                  <p className="text-[#707070] text-lg">{loadingStatus}</p>
                 </div>
-              ))}
+              )}
+
+              {/* Results Content */}
+              {!loading && session && (
+                <>
+                  {/* Stats Row */}
+                  <div className="flex-shrink-0 flex items-center justify-between mb-4 px-1">
+                    <div className="flex items-center gap-5 text-sm">
+                      <span className="flex items-center gap-2 text-[#707070]">
+                        <ListMusic className="w-4 h-4 text-[#3b82f6]" /> 
+                        <span className="text-[#f5f5f5]">{metrics.count}</span> tracks
+                      </span>
+                      <span className="flex items-center gap-2 text-[#707070]">
+                        <Clock className="w-4 h-4 text-[#FB7185]" /> 
+                        <span className="text-[#f5f5f5]">{metrics.duration}</span> min
+                      </span>
+                      <span className="flex items-center gap-2 text-[#707070]">
+                        <Zap className="w-4 h-4 text-[#9a9a9a]" /> 
+                        <span className="text-[#f5f5f5]">{metrics.score}%</span> match
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => copyToClipboard('names')} className="text-sm px-4 py-2 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#f5f5f5] hover:border-[#707070]/50 flex items-center gap-2 transition-colors">
+                        {copied === 'names' ? <Check className="w-4 h-4 text-[#3b82f6]" /> : <Copy className="w-4 h-4" />} Names
+                      </button>
+                      <button onClick={() => copyToClipboard('uris')} className="text-sm px-4 py-2 rounded-lg bg-[#3b82f6]/10 border border-[#3b82f6]/30 text-[#3b82f6] hover:bg-[#3b82f6]/20 flex items-center gap-2 transition-colors">
+                        {copied === 'uris' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} URIs
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Track List */}
+                  <div className="flex-1 overflow-y-auto rounded-xl bg-[#0f0f0f]/95 border border-[#404040]/20">
+                    {session.recommendations?.map((track, i) => (
+                      <div key={track.trackId || i} className="flex items-center gap-4 px-4 py-3 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors group">
+                        <span className="w-6 text-center text-[#5a5a5a] text-sm">{i + 1}</span>
+                        {track.albumImage ? (
+                          <img src={track.albumImage} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-[#141414] flex items-center justify-center">
+                            <Music2 className="w-4 h-4 text-[#5a5a5a]" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[#f5f5f5] text-sm truncate">{track.name}</p>
+                          <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
+                        </div>
+                        <span className="text-xs text-[#3b82f6] bg-[#3b82f6]/10 px-2.5 py-1 rounded-lg border border-[#3b82f6]/20">{track.moodScore || 0}%</span>
+                        {track.externalUrl && (
+                          <a href={track.externalUrl} target="_blank" rel="noopener noreferrer" className="text-[#5a5a5a] hover:text-[#3b82f6] transition-colors opacity-0 group-hover:opacity-100">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
     </div>
   )
