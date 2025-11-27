@@ -74,20 +74,20 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-[#0a0a0a] overflow-hidden">
-      {/* Header */}
+      {/* Header - Centered */}
       <header className="flex-shrink-0 border-b border-[#404040]/20 px-6 py-3 bg-[#0f0f0f]/95">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <button onClick={resetAll} className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#141414] border border-[#404040]/30 rounded-xl flex items-center justify-center">
-              <Music2 className="w-5 h-5 text-[#9a9a9a]" />
-            </div>
-            <span className="font-medium text-[#f5f5f5] text-lg">Mood Mixer</span>
-          </button>
+        <div className="flex items-center justify-center relative">
           {showResults && (
-            <button onClick={resetAll} className="px-4 py-2 rounded-lg bg-[#141414] text-[#9a9a9a] hover:text-[#f5f5f5] border border-[#404040]/30 flex items-center gap-2 transition-colors">
+            <button onClick={resetAll} className="absolute left-0 px-4 py-2 rounded-lg bg-[#141414] text-[#9a9a9a] hover:text-[#f5f5f5] border border-[#404040]/30 flex items-center gap-2 transition-colors">
               <RotateCcw className="w-4 h-4" /> New Mix
             </button>
           )}
+          <button onClick={resetAll} className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#141414] border border-[#3b82f6]/20 rounded-xl flex items-center justify-center">
+              <Music2 className="w-5 h-5 text-[#3b82f6]" />
+            </div>
+            <span className="font-medium text-[#f5f5f5] text-lg">Mood Mixer</span>
+          </button>
         </div>
       </header>
 
@@ -104,26 +104,26 @@ export default function App() {
 
               <div className="space-y-2">
                 <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
-                  <Music2 className="w-4 h-4" /> Spotify Playlist URL
+                  <Music2 className="w-4 h-4 text-[#3b82f6]" /> Spotify Playlist URL
                 </label>
                 <input
                   type="text"
                   value={playlistUrl}
                   onChange={(e) => setPlaylistUrl(e.target.value)}
                   placeholder="https://open.spotify.com/playlist/..."
-                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#707070] focus:outline-none transition-colors"
+                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#3b82f6]/50 focus:outline-none transition-colors"
                 />
               </div>
 
               <div className="space-y-2">
                 <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
-                  <Zap className="w-4 h-4" /> Describe your vibe
+                  <Zap className="w-4 h-4 text-[#FB7185]" /> Describe your vibe
                 </label>
                 <textarea
                   value={moodInput}
                   onChange={(e) => setMoodInput(e.target.value)}
                   placeholder="e.g., feeling chill and want something relaxing..."
-                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#707070] focus:outline-none resize-none h-24 transition-colors"
+                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#FB7185]/50 focus:outline-none resize-none h-24 transition-colors"
                 />
                 <div className="flex gap-2 mt-3">
                   {['energetic', 'chill', 'focus', 'melancholic'].map((mood) => (
@@ -131,7 +131,7 @@ export default function App() {
                       key={mood}
                       type="button"
                       onClick={() => setMoodInput(mood)}
-                      className={`text-sm px-4 py-2 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#141414] border-[#9a9a9a]/50 text-[#f5f5f5]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a]'}`}
+                      className={`text-sm px-4 py-2 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#FB7185]/10 border-[#FB7185]/30 text-[#FB7185]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
                     >
                       {mood}
                     </button>
@@ -141,7 +141,7 @@ export default function App() {
 
               <div className="space-y-2">
                 <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
-                  <Clock className="w-4 h-4" /> Duration
+                  <Clock className="w-4 h-4 text-[#9a9a9a]" /> Duration
                 </label>
                 <div className="flex gap-2">
                   {DURATION_OPTIONS.map((d) => (
@@ -149,7 +149,7 @@ export default function App() {
                       key={d}
                       type="button"
                       onClick={() => setDuration(d)}
-                      className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${duration === d ? 'bg-[#141414] text-[#f5f5f5] border border-[#9a9a9a]/50' : 'bg-[#0f0f0f] text-[#707070] border border-[#404040]/30 hover:text-[#9a9a9a]'}`}
+                      className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${duration === d ? 'bg-[#3b82f6]/10 text-[#3b82f6] border border-[#3b82f6]/30' : 'bg-[#0f0f0f] text-[#707070] border border-[#404040]/30 hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
                     >
                       {d} min
                     </button>
@@ -166,7 +166,7 @@ export default function App() {
               <button
                 type="submit"
                 disabled={!playlistUrl.trim() || !moodInput.trim()}
-                className="w-full bg-[#141414] hover:bg-[#1a1a1a] disabled:bg-[#0f0f0f] disabled:text-[#5a5a5a] text-[#f5f5f5] font-medium py-4 rounded-xl flex items-center justify-center gap-3 text-base border border-[#404040]/30 hover:border-[#707070]/50 disabled:border-[#404040]/20 transition-colors"
+                className="w-full bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 disabled:bg-[#0f0f0f] disabled:text-[#5a5a5a] text-[#3b82f6] disabled:border-[#404040]/20 font-medium py-4 rounded-xl flex items-center justify-center gap-3 text-base border border-[#3b82f6]/30 hover:border-[#3b82f6]/50 transition-colors"
               >
                 <Send className="w-5 h-5" /> Generate Mix
               </button>
@@ -179,7 +179,7 @@ export default function App() {
         {/* Loading */}
         {loading && (
           <div className="h-full flex flex-col items-center justify-center">
-            <Loader2 className="w-12 h-12 text-[#9a9a9a] animate-spin mb-4" />
+            <Loader2 className="w-12 h-12 text-[#3b82f6] animate-spin mb-4" />
             <p className="text-[#707070] text-lg">{loadingStatus}</p>
           </div>
         )}
@@ -188,37 +188,40 @@ export default function App() {
         {showResults && session && (
           <div className="h-full flex flex-col p-4 max-w-4xl mx-auto">
             {/* Stats Row */}
-            <div className="flex-shrink-0 flex items-center justify-between mb-3">
-              <div className="flex items-center gap-4 text-sm">
-                <span className="flex items-center gap-1.5 text-[#707070]">
-                  <ListMusic className="w-4 h-4 text-[#9a9a9a]" /> {metrics.count} tracks
+            <div className="flex-shrink-0 flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-5 text-sm">
+                <span className="flex items-center gap-2 text-[#707070]">
+                  <ListMusic className="w-4 h-4 text-[#3b82f6]" /> 
+                  <span className="text-[#f5f5f5]">{metrics.count}</span> tracks
                 </span>
-                <span className="flex items-center gap-1.5 text-[#707070]">
-                  <Clock className="w-4 h-4 text-[#9a9a9a]" /> {metrics.duration}m
+                <span className="flex items-center gap-2 text-[#707070]">
+                  <Clock className="w-4 h-4 text-[#FB7185]" /> 
+                  <span className="text-[#f5f5f5]">{metrics.duration}</span> min
                 </span>
-                <span className="flex items-center gap-1.5 text-[#9a9a9a]">
-                  <Zap className="w-4 h-4" /> {metrics.score}% match
+                <span className="flex items-center gap-2 text-[#707070]">
+                  <Zap className="w-4 h-4 text-[#9a9a9a]" /> 
+                  <span className="text-[#f5f5f5]">{metrics.score}%</span> match
                 </span>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => copyToClipboard('names')} className="text-xs px-3 py-1.5 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#f5f5f5] flex items-center gap-1.5 transition-colors">
-                  {copied === 'names' ? <Check className="w-3 h-3 text-[#9a9a9a]" /> : <Copy className="w-3 h-3" />} Names
+                <button onClick={() => copyToClipboard('names')} className="text-sm px-4 py-2 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#f5f5f5] hover:border-[#707070]/50 flex items-center gap-2 transition-colors">
+                  {copied === 'names' ? <Check className="w-4 h-4 text-[#3b82f6]" /> : <Copy className="w-4 h-4" />} Names
                 </button>
-                <button onClick={() => copyToClipboard('uris')} className="text-xs px-3 py-1.5 rounded-lg bg-[#141414] border border-[#9a9a9a]/30 text-[#9a9a9a] hover:text-[#f5f5f5] flex items-center gap-1.5 transition-colors">
-                  {copied === 'uris' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} URIs
+                <button onClick={() => copyToClipboard('uris')} className="text-sm px-4 py-2 rounded-lg bg-[#3b82f6]/10 border border-[#3b82f6]/30 text-[#3b82f6] hover:bg-[#3b82f6]/20 flex items-center gap-2 transition-colors">
+                  {copied === 'uris' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} URIs
                 </button>
               </div>
             </div>
 
             {/* Track List */}
-            <div className="flex-1 overflow-y-auto rounded-lg bg-[#0f0f0f]/95 border border-[#404040]/20">
+            <div className="flex-1 overflow-y-auto rounded-xl bg-[#0f0f0f]/95 border border-[#404040]/20">
               {session.recommendations?.map((track, i) => (
-                <div key={track.trackId || i} className="flex items-center gap-3 px-3 py-2 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors">
-                  <span className="w-5 text-center text-[#5a5a5a] text-xs">{i + 1}</span>
+                <div key={track.trackId || i} className="flex items-center gap-4 px-4 py-3 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors group">
+                  <span className="w-6 text-center text-[#5a5a5a] text-sm">{i + 1}</span>
                   {track.albumImage ? (
-                    <img src={track.albumImage} alt="" className="w-9 h-9 rounded object-cover" />
+                    <img src={track.albumImage} alt="" className="w-10 h-10 rounded-lg object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded bg-[#141414] flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-[#141414] flex items-center justify-center">
                       <Music2 className="w-4 h-4 text-[#5a5a5a]" />
                     </div>
                   )}
@@ -226,9 +229,9 @@ export default function App() {
                     <p className="text-[#f5f5f5] text-sm truncate">{track.name}</p>
                     <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
                   </div>
-                  <span className="text-xs text-[#9a9a9a] bg-[#141414] px-2 py-0.5 rounded border border-[#404040]/30">{track.moodScore || 0}%</span>
+                  <span className="text-xs text-[#3b82f6] bg-[#3b82f6]/10 px-2.5 py-1 rounded-lg border border-[#3b82f6]/20">{track.moodScore || 0}%</span>
                   {track.externalUrl && (
-                    <a href={track.externalUrl} target="_blank" rel="noopener noreferrer" className="text-[#5a5a5a] hover:text-[#9a9a9a] transition-colors">
+                    <a href={track.externalUrl} target="_blank" rel="noopener noreferrer" className="text-[#5a5a5a] hover:text-[#3b82f6] transition-colors opacity-0 group-hover:opacity-100">
                       <ExternalLink className="w-4 h-4" />
                     </a>
                   )}
