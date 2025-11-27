@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #121212;
+  color: #ffffff;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Animation utilities */
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Mood category colors */
+.mood-happy_energetic { background: linear-gradient(135deg, #FFD93D, #FF6B6B); }
+.mood-calm_peaceful { background: linear-gradient(135deg, #6BCB77, #4D96FF); }
+.mood-melancholic { background: linear-gradient(135deg, #6B7AA1, #1F4068); }
+.mood-party_dance { background: linear-gradient(135deg, #FF6B6B, #C850C0); }
+.mood-romantic { background: linear-gradient(135deg, #FF9A9E, #FAD0C4); }
+.mood-motivational { background: linear-gradient(135deg, #F093FB, #F5576C); }
+.mood-chill_ambient { background: linear-gradient(135deg, #667EEA, #764BA2); }
+.mood-intense_aggressive { background: linear-gradient(135deg, #434343, #000000); }
