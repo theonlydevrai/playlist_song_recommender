@@ -1,165 +1,161 @@
-# 🎵 Spotify Mood Recommender
+# Mood Mixer
 
-An AI-powered web application that analyzes public Spotify playlists, categorizes songs by mood, and creates personalized recommendations based on how you're feeling.
+AI-powered playlist curator that analyzes public Spotify playlists and creates personalized recommendations based on your mood.
 
-![Node.js](https://img.shields.io/badge/Node.js-18+-green)
-![Python](https://img.shields.io/badge/Python-3.9+-blue)
-![React](https://img.shields.io/badge/React-18-61dafb)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+## Features
 
-## ✨ Features
+- **No Login Required** - Works with any public Spotify playlist URL
+- **AI Mood Analysis** - Natural language mood input powered by Google Gemini
+- **Smart Recommendations** - Matches songs to your vibe using audio features
+- **Duration Control** - Get playlists that fit your exact time needs
+- **Easy Export** - Copy track names or Spotify URIs
 
-- **🔒 Privacy First** - No login required! Just paste a public playlist URL
-- **🎭 AI Mood Analysis** - Describe your mood in natural language, powered by Google Gemini
-- **📊 Smart Categorization** - Automatically groups songs into 8 mood categories
-- **⏱️ Duration Matching** - Creates playlists that fit your exact time needs
-- **📋 Easy Export** - Copy track names or Spotify URIs to add to your own playlists
-- **🚀 No Database Required** - Stateless design, all processing happens in-memory
+## Tech Stack
 
-## 🖼️ How It Works
+- **Frontend**: React, Vite, Tailwind CSS
+- **Backend**: Node.js, Express
+- **ML Service**: Python, Flask
+- **AI**: Google Gemini 2.5 Flash-Lite
+- **Data**: Spotify Web API (Client Credentials)
 
-1. **Paste** a public Spotify playlist URL
-2. **Wait** for automatic mood analysis (1-2 min)
-3. **Describe** how you're feeling
-4. **Set** your desired playlist duration
-5. **Get** personalized song recommendations
-6. **Copy** and add tracks to your Spotify manually
+## Prerequisites
 
-## 🏗️ Tech Stack
+- Node.js 18+ ([Download](https://nodejs.org/))
+- Python 3.9+ ([Download](https://python.org/))
+- Git ([Download](https://git-scm.com/))
 
-| Component | Technology |
-|-----------|------------|
-| Frontend | React 18, Vite, Tailwind CSS |
-| Backend | Node.js, Express |
-| ML Service | Python, Flask, scikit-learn |
-| AI | Google Gemini API |
-| Spotify | Client Credentials Flow (no user auth) |
+## Setup Guide
 
-## 📁 Project Structure
+### Step 1: Get API Credentials
 
-```
-spotify_recommender/
-├── backend/                 # Node.js API server
-│   ├── src/
-│   │   ├── routes/         # API endpoints
-│   │   └── services/       # Spotify, Gemini, ML services
-│   └── package.json
-├── frontend/               # React application
-│   ├── src/
-│   │   ├── components/     # Reusable components
-│   │   └── pages/          # Page components
-│   └── package.json
-├── ml-service/             # Python ML service
-│   ├── app.py              # Flask server
-│   └── requirements.txt
-├── SETUP_GUIDE.md          # Detailed setup instructions
-└── start-app.bat           # Windows quick launcher
-```
+**Spotify API:**
 
-## 🚀 Quick Start
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Log in and click "Create App"
+3. Fill in app name, description, and set redirect URI to `http://localhost:3001/callback`
+4. Select "Web API" and save
+5. Copy your **Client ID** and **Client Secret** from Settings
 
-### Prerequisites
+**Google Gemini API:**
 
-- Node.js 18+
-- Python 3.9+
-- [Spotify Developer Account](https://developer.spotify.com/dashboard)
-- [Google AI Studio API Key](https://aistudio.google.com/app/apikey)
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Click "Create API Key"
+3. Copy your **API Key**
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repo-url>
-   cd spotify_recommender
-   ```
-
-2. **Setup Backend**
-   ```bash
-   cd backend
-   npm install
-   cp .env.example .env
-   # Edit .env with your Spotify and Gemini API credentials
-   ```
-
-3. **Setup Frontend**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-4. **Setup ML Service**
-   ```bash
-   cd ml-service
-   python -m venv venv
-   
-   # Windows
-   .\venv\Scripts\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
-   
-   pip install -r requirements.txt
-   ```
-
-5. **Configure Environment Variables**
-   
-   Edit `backend/.env`:
-   ```env
-   SPOTIFY_CLIENT_ID=your_spotify_client_id
-   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-   GEMINI_API_KEY=your_gemini_api_key
-   ```
-
-### Running the App
-
-**Option 1: Quick Start (Windows)**
-```bash
-# Double-click start-app.bat
-```
-
-**Option 2: Manual Start (3 terminals)**
+### Step 2: Clone Repository
 
 ```bash
-# Terminal 1 - Backend
-cd backend && npm run dev
+git clone <repo-url>
+cd spotify_recommender
+```
 
-# Terminal 2 - ML Service
+### Step 3: Setup Backend
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+```
+
+Edit `backend/.env` with your credentials:
+
+```env
+SPOTIFY_CLIENT_ID=your_spotify_client_id
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+GEMINI_API_KEY=your_gemini_api_key
+PORT=3001
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+ML_SERVICE_URL=http://localhost:5000
+```
+
+```bash
+cd ..
+```
+
+### Step 4: Setup Frontend
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### Step 5: Setup ML Service
+
+```bash
 cd ml-service
-.\venv\Scripts\activate  # Windows
-python app.py
+python -m venv venv
 
-# Terminal 3 - Frontend
-cd frontend && npm run dev
+# Activate virtual environment
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+# Windows Command Prompt:
+# venv\Scripts\activate.bat
+# macOS/Linux:
+# source venv/bin/activate
+
+pip install -r requirements.txt
+cp .env.example .env
+cd ..
 ```
 
-6. **Open** http://localhost:3000
+The ML service `.env` uses defaults (port 5000) - no changes needed.
 
-## 📖 Detailed Setup
+### Step 6: Run the Application
 
-See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for:
-- Step-by-step API credential setup
-- Troubleshooting guide
+**Option A: Windows Quick Start**
 
-## 🔒 Privacy
+Double-click `start-app.bat`
 
-This app is designed with privacy in mind:
-- **No user login required**
-- **No personal data collected**
-- **Only accesses public playlist data**
-- **No listening history tracked**
-- **No database - everything is in-memory**
-- Uses Spotify's Client Credentials flow (app-level access only)
+**Option B: Manual Start (3 terminals)**
 
-## 🤝 Contributing
+Terminal 1 - Backend:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```bash
+cd backend
+npm run dev
+```
 
-## 📄 License
+Terminal 2 - ML Service:
 
-This project is licensed under the MIT License.
+```bash
+cd ml-service
+.\venv\Scripts\Activate.ps1  # or activate.bat / source venv/bin/activate
+python app.py
+```
 
-## 🙏 Acknowledgments
+Terminal 3 - Frontend:
 
-- [Spotify Web API](https://developer.spotify.com/documentation/web-api)
-- [Google Gemini API](https://ai.google.dev/)
-- [Tailwind CSS](https://tailwindcss.com/)
+```bash
+cd frontend
+npm run dev
+```
+
+### Step 7: Open the App
+
+Go to http://localhost:3000
+
+## Usage
+
+1. Paste a public Spotify playlist URL
+2. Describe your mood (e.g., "chill vibes", "workout energy")
+3. Select duration
+4. Click "Generate Mix"
+5. Copy results to your Spotify
+
+## Project Structure
+
+```
+├── backend/          # Express API server (port 3001)
+├── frontend/         # React app (port 3000)
+├── ml-service/       # Python ML service (port 5000)
+└── start-app.bat     # Windows launcher
+```
+
+## Privacy
+
+- No user authentication required
+- No personal data stored
+- Only public playlist data accessed
+- Stateless - no database

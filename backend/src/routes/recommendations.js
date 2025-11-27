@@ -55,10 +55,11 @@ router.post('/', async (req, res) => {
     console.log(`Sample track:`, tracksData[0]?.name, tracksData[0]?.duration_ms);
 
     // Get recommendations
-    const recommendations = mlService.ruleBasedRecommendations(
+    const recommendations = await mlService.ruleBasedRecommendations(
       tracksData,
       moodAnalysis,
-      targetDuration
+      targetDuration,
+      sanitizedMood
     );
 
     res.json({
