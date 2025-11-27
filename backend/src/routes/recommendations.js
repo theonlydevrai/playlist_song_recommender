@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const spotifyService = require('../services/spotifyService');
 const geminiService = require('../services/geminiService');
 const mlService = require('../services/mlService');
@@ -7,10 +8,26 @@ const User = require('../models/User');
 const Playlist = require('../models/Playlist');
 const MoodSession = require('../models/MoodSession');
 
+// Helper to validate MongoDB ObjectId
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+// Helper to sanitize mood description
+const sanitizeMoodInput = (input) => {
+  if (typeof input !== 'string') return null;
+  // Remove any HTML/script tags and limit length
+  const cleaned = input.replace(/<[^>]*>/g, '').trim();
+  if (cleaned.length === 0 || cleaned.length > 500) return null;
+  return cleaned;
+};
+
 // Middleware to check authentication
 const requireAuth = async (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  if (!isValidObjectId(req.session.userId)) {
+    return res.status(401).json({ error: 'Invalid session' });
   }
 
   const user = await User.findById(req.session.userId);
@@ -38,10 +55,21 @@ const requireAuth = async (req, res, next) => {
 router.post('/', requireAuth, async (req, res) => {
   const { playlistId, moodDescription, durationMinutes } = req.body;
 
-  if (!playlistId || !moodDescription || !durationMinutes) {
-    return res.status(400).json({ 
-      error: 'Missing required fields: playlistId, moodDescription, durationMinutes' 
-    });
+  // Validate playlistId
+  if (!playlistId || !isValidObjectId(playlistId)) {
+    return res.status(400).json({ error: 'Invalid playlist ID' });
+  }
+
+  // Sanitize mood description
+  const sanitizedMood = sanitizeMoodInput(moodDescription);
+  if (!sanitizedMood) {
+    return res.status(400).json({ error: 'Invalid mood description (1-500 characters required)' });
+  }
+
+  // Validate duration
+  const duration = parseInt(durationMinutes, 10);
+  if (isNaN(duration) || duration < 5 || duration > 480) {
+    return res.status(400).json({ error: 'Duration must be between 5 and 480 minutes' });
   }
 
   try {
@@ -60,10 +88,10 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     // Analyze mood using Gemini
-    const moodAnalysis = await geminiService.analyzeMood(moodDescription);
+    const moodAnalysis = await geminiService.analyzeMood(sanitizedMood);
 
     // Convert duration to milliseconds
-    const targetDuration = durationMinutes * 60 * 1000;
+    const targetDuration = duration * 60 * 1000;
 
     // Get recommendations
     const recommendations = mlService.ruleBasedRecommendations(
@@ -76,7 +104,7 @@ router.post('/', requireAuth, async (req, res) => {
     const session = await MoodSession.create({
       userId: req.user._id,
       playlistId: playlist._id,
-      moodInput: moodDescription,
+      moodInput: sanitizedMood,
       processedMood: moodAnalysis,
       durationRequested: targetDuration,
       recommendedTracks: recommendations.tracks,
@@ -130,6 +158,10 @@ router.get('/history', requireAuth, async (req, res) => {
 
 // Get specific session
 router.get('/:sessionId', requireAuth, async (req, res) => {
+  if (!isValidObjectId(req.params.sessionId)) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
   try {
     const session = await MoodSession.findOne({
       _id: req.params.sessionId,
@@ -159,7 +191,15 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
 
 // Save recommendations to Spotify
 router.post('/:sessionId/save', requireAuth, async (req, res) => {
-  const { name } = req.body;
+  if (!isValidObjectId(req.params.sessionId)) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
+  // Sanitize playlist name
+  let { name } = req.body;
+  if (name && typeof name === 'string') {
+    name = name.replace(/<[^>]*>/g, '').trim().slice(0, 100);
+  }
 
   try {
     const session = await MoodSession.findOne({

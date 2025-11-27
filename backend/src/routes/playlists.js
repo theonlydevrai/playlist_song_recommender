@@ -1,14 +1,35 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const spotifyService = require('../services/spotifyService');
 const mlService = require('../services/mlService');
 const User = require('../models/User');
 const Playlist = require('../models/Playlist');
 
+// Helper to validate MongoDB ObjectId
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+// Helper to sanitize playlist URL
+const sanitizePlaylistUrl = (url) => {
+  if (typeof url !== 'string') return null;
+  // Only allow Spotify URLs
+  const spotifyUrlPattern = /^https?:\/\/(open\.)?spotify\.com\/playlist\/[a-zA-Z0-9]+/;
+  const spotifyUriPattern = /^spotify:playlist:[a-zA-Z0-9]+$/;
+  if (spotifyUrlPattern.test(url) || spotifyUriPattern.test(url)) {
+    return url.trim();
+  }
+  return null;
+};
+
 // Middleware to check authentication
 const requireAuth = async (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  // Validate session userId is valid ObjectId
+  if (!isValidObjectId(req.session.userId)) {
+    return res.status(401).json({ error: 'Invalid session' });
   }
 
   const user = await User.findById(req.session.userId);
@@ -36,15 +57,17 @@ const requireAuth = async (req, res, next) => {
 router.post('/analyze', requireAuth, async (req, res) => {
   const { playlistUrl } = req.body;
 
-  if (!playlistUrl) {
-    return res.status(400).json({ error: 'Playlist URL is required' });
+  // Validate and sanitize input
+  const sanitizedUrl = sanitizePlaylistUrl(playlistUrl);
+  if (!sanitizedUrl) {
+    return res.status(400).json({ error: 'Invalid Spotify playlist URL' });
   }
 
   try {
     // Extract playlist ID from URL
-    const playlistId = spotifyService.extractPlaylistId(playlistUrl);
+    const playlistId = spotifyService.extractPlaylistId(sanitizedUrl);
     if (!playlistId) {
-      return res.status(400).json({ error: 'Invalid playlist URL' });
+      return res.status(400).json({ error: 'Could not extract playlist ID from URL' });
     }
 
     // Check if playlist already exists
@@ -136,6 +159,11 @@ router.get('/', requireAuth, async (req, res) => {
 
 // Get specific playlist with mood breakdown
 router.get('/:id', requireAuth, async (req, res) => {
+  // Validate ObjectId
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid playlist ID' });
+  }
+
   try {
     const playlist = await Playlist.findOne({
       _id: req.params.id,
@@ -177,11 +205,21 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // Delete a playlist from the app
 router.delete('/:id', requireAuth, async (req, res) => {
+  // Validate ObjectId
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid playlist ID' });
+  }
+
   try {
-    await Playlist.deleteOne({
+    const result = await Playlist.deleteOne({
       _id: req.params.id,
       userId: req.user._id
     });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete playlist' });

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require('crypto');
 
 const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
@@ -11,7 +12,12 @@ class SpotifyService {
     this.redirectUri = process.env.SPOTIFY_REDIRECT_URI;
   }
 
-  getAuthUrl() {
+  // Generate a random state for CSRF protection
+  generateState() {
+    return crypto.randomBytes(16).toString('hex');
+  }
+
+  getAuthUrl(state) {
     const scopes = [
       'playlist-read-private',
       'playlist-read-collaborative',
@@ -26,7 +32,8 @@ class SpotifyService {
       response_type: 'code',
       redirect_uri: this.redirectUri,
       scope: scopes.join(' '),
-      show_dialog: 'true'
+      show_dialog: 'true',
+      state: state // CSRF protection
     });
 
     return `${SPOTIFY_AUTH_URL}?${params.toString()}`;

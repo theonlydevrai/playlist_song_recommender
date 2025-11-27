@@ -5,16 +5,32 @@ const User = require('../models/User');
 
 // Get Spotify authorization URL
 router.get('/spotify', (req, res) => {
-  const authUrl = spotifyService.getAuthUrl();
+  // Generate state for CSRF protection
+  const state = spotifyService.generateState();
+  req.session.oauthState = state;
+  
+  const authUrl = spotifyService.getAuthUrl(state);
   res.json({ url: authUrl });
 });
 
 // Handle Spotify callback
 router.get('/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
+
+  // Verify state to prevent CSRF attacks
+  if (!state || state !== req.session.oauthState) {
+    return res.redirect(`${process.env.FRONTEND_URL}/auth/error?error=invalid_state`);
+  }
+  
+  // Clear the state after use
+  delete req.session.oauthState;
 
   if (error) {
-    return res.redirect(`${process.env.FRONTEND_URL}/auth/error?error=${error}`);
+    return res.redirect(`${process.env.FRONTEND_URL}/auth/error?error=${encodeURIComponent(error)}`);
+  }
+
+  if (!code) {
+    return res.redirect(`${process.env.FRONTEND_URL}/auth/error?error=missing_code`);
   }
 
   try {
@@ -92,8 +108,13 @@ router.get('/user', async (req, res) => {
 
 // Logout
 router.post('/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to logout' });
+    }
+    res.clearCookie('connect.sid');
+    res.json({ success: true });
+  });
 });
 
 module.exports = router;
