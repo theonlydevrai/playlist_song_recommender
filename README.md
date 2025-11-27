@@ -14,6 +14,7 @@ An AI-powered web application that analyzes public Spotify playlists, categorize
 - **📊 Smart Categorization** - Automatically groups songs into 8 mood categories
 - **⏱️ Duration Matching** - Creates playlists that fit your exact time needs
 - **📋 Easy Export** - Copy track names or Spotify URIs to add to your own playlists
+- **🚀 No Database Required** - Stateless design, all processing happens in-memory
 
 ## 🖼️ How It Works
 
@@ -29,7 +30,7 @@ An AI-powered web application that analyzes public Spotify playlists, categorize
 | Component | Technology |
 |-----------|------------|
 | Frontend | React 18, Vite, Tailwind CSS |
-| Backend | Node.js, Express, MongoDB |
+| Backend | Node.js, Express |
 | ML Service | Python, Flask, scikit-learn |
 | AI | Google Gemini API |
 | Spotify | Client Credentials Flow (no user auth) |
@@ -40,7 +41,6 @@ An AI-powered web application that analyzes public Spotify playlists, categorize
 spotify_recommender/
 ├── backend/                 # Node.js API server
 │   ├── src/
-│   │   ├── models/         # MongoDB schemas
 │   │   ├── routes/         # API endpoints
 │   │   └── services/       # Spotify, Gemini, ML services
 │   └── package.json
@@ -62,7 +62,6 @@ spotify_recommender/
 
 - Node.js 18+
 - Python 3.9+
-- MongoDB Compass ([Download](https://www.mongodb.com/try/download/compass))
 - [Spotify Developer Account](https://developer.spotify.com/dashboard)
 - [Google AI Studio API Key](https://aistudio.google.com/app/apikey)
 
@@ -109,7 +108,6 @@ spotify_recommender/
    SPOTIFY_CLIENT_ID=your_spotify_client_id
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
    GEMINI_API_KEY=your_gemini_api_key
-   MONGODB_URI=mongodb://localhost:27017/spotify_mood_recommender
    ```
 
 ### Running the App
@@ -140,7 +138,6 @@ cd frontend && npm run dev
 
 See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for:
 - Step-by-step API credential setup
-- MongoDB Compass configuration
 - Troubleshooting guide
 
 ## 🔒 Privacy
@@ -150,6 +147,7 @@ This app is designed with privacy in mind:
 - **No personal data collected**
 - **Only accesses public playlist data**
 - **No listening history tracked**
+- **No database - everything is in-memory**
 - Uses Spotify's Client Credentials flow (app-level access only)
 
 ## 🤝 Contributing

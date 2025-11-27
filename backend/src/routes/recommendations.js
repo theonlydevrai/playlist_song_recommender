@@ -1,13 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const geminiService = require('../services/geminiService');
 const mlService = require('../services/mlService');
-const Playlist = require('../models/Playlist');
-const MoodSession = require('../models/MoodSession');
-
-// Helper to validate MongoDB ObjectId
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+const { playlistCache } = require('./playlists');
 
 // Helper to sanitize mood description
 const sanitizeMoodInput = (input) => {
@@ -22,7 +17,7 @@ router.post('/', async (req, res) => {
   const { playlistId, moodDescription, durationMinutes } = req.body;
 
   // Validate playlistId
-  if (!playlistId || !isValidObjectId(playlistId)) {
+  if (!playlistId) {
     return res.status(400).json({ error: 'Invalid playlist ID' });
   }
 
@@ -39,15 +34,11 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Get the playlist
-    const playlist = await Playlist.findById(playlistId);
+    // Get the playlist from in-memory cache
+    const playlist = playlistCache.get(playlistId);
 
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found. Please analyze a playlist first.' });
-    }
-
-    if (!playlist.isProcessed) {
-      return res.status(400).json({ error: 'Playlist has not been processed yet' });
     }
 
     // Analyze mood using Gemini
@@ -56,8 +47,8 @@ router.post('/', async (req, res) => {
     // Convert duration to milliseconds
     const targetDuration = duration * 60 * 1000;
 
-    // Convert Mongoose documents to plain objects for processing
-    const tracksData = playlist.tracks.map(t => t.toObject ? t.toObject() : t);
+    // Use tracks directly (already plain objects)
+    const tracksData = playlist.tracks;
     
     // Debug log
     console.log(`Processing ${tracksData.length} tracks for ${duration} min playlist`);
@@ -70,25 +61,9 @@ router.post('/', async (req, res) => {
       targetDuration
     );
 
-    // Ensure totalDuration is valid (fallback to 0 if NaN)
-    const actualDuration = Number.isFinite(recommendations.totalDuration) 
-      ? recommendations.totalDuration 
-      : 0;
-
-    // Create mood session for history
-    const session = await MoodSession.create({
-      playlistId: playlist._id,
+    res.json({
       playlistName: playlist.name,
       moodInput: sanitizedMood,
-      processedMood: moodAnalysis,
-      durationRequested: targetDuration,
-      recommendedTracks: recommendations.tracks,
-      actualDuration: actualDuration
-    });
-
-    res.json({
-      sessionId: session._id,
-      playlistName: playlist.name,
       moodAnalysis: {
         emotions: moodAnalysis.emotions,
         energyLevel: moodAnalysis.energy_level,
@@ -106,55 +81,6 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('Recommendation error:', err);
     res.status(500).json({ error: 'Failed to generate recommendations. Please try again.' });
-  }
-});
-
-// Get session history (recent sessions)
-router.get('/history', async (req, res) => {
-  try {
-    const sessions = await MoodSession.find()
-      .sort({ createdAt: -1 })
-      .limit(20);
-
-    res.json(sessions.map(s => ({
-      id: s._id,
-      playlistName: s.playlistName,
-      moodInput: s.moodInput,
-      moodCategory: s.processedMood?.mood_category,
-      trackCount: s.recommendedTracks.length,
-      duration: formatDuration(s.actualDuration),
-      createdAt: s.createdAt
-    })));
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to get history' });
-  }
-});
-
-// Get specific session
-router.get('/:sessionId', async (req, res) => {
-  if (!isValidObjectId(req.params.sessionId)) {
-    return res.status(400).json({ error: 'Invalid session ID' });
-  }
-
-  try {
-    const session = await MoodSession.findById(req.params.sessionId);
-
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    res.json({
-      id: session._id,
-      playlistName: session.playlistName,
-      moodInput: session.moodInput,
-      moodAnalysis: session.processedMood,
-      recommendations: session.recommendedTracks,
-      totalDuration: session.actualDuration,
-      totalDurationFormatted: formatDuration(session.actualDuration),
-      createdAt: session.createdAt
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to get session' });
   }
 });
 

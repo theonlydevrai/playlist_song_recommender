@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const spotifyService = require('../services/spotifyService');
 const mlService = require('../services/mlService');
 const geminiService = require('../services/geminiService');
-const Playlist = require('../models/Playlist');
 
-// Helper to validate MongoDB ObjectId
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+// In-memory cache for analyzed playlists (per session)
+const playlistCache = new Map();
 
 // Helper to sanitize playlist URL
 const sanitizePlaylistUrl = (url) => {
@@ -37,25 +35,6 @@ router.post('/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Could not extract playlist ID from URL' });
     }
 
-    // Check if playlist already analyzed (cache)
-    let existingPlaylist = await Playlist.findOne({ spotifyPlaylistId: playlistId });
-
-    if (existingPlaylist && existingPlaylist.isProcessed) {
-      // Return cached result
-      return res.json({
-        playlistId: existingPlaylist._id,
-        name: existingPlaylist.name,
-        description: existingPlaylist.description,
-        imageUrl: existingPlaylist.imageUrl,
-        owner: existingPlaylist.owner,
-        trackCount: existingPlaylist.totalTracks,
-        status: 'cached',
-        moodCategories: Object.fromEntries(
-          Object.entries(existingPlaylist.moodCategories?.toObject() || {}).map(([k, v]) => [k, v.length])
-        )
-      });
-    }
-
     // Get playlist info from Spotify
     const playlistInfo = await spotifyService.getPlaylist(playlistId);
     
@@ -83,7 +62,6 @@ router.post('/analyze', async (req, res) => {
     });
 
     // Use Gemini to analyze track moods from song names and artists
-    // This replaces the deprecated Spotify Audio Features API
     console.log(`Analyzing ${tracks.length} tracks with AI...`);
     const trackMoodMap = await geminiService.analyzeTracksMood(tracks);
 
@@ -112,39 +90,29 @@ router.post('/analyze', async (req, res) => {
     // Cluster tracks using ML service
     const clusterResult = mlService.ruleBasedClustering(tracks);
 
-    // Save or update playlist
-    if (existingPlaylist) {
-      existingPlaylist.name = playlistInfo.name;
-      existingPlaylist.description = playlistInfo.description;
-      existingPlaylist.imageUrl = playlistInfo.images?.[0]?.url;
-      existingPlaylist.owner = playlistInfo.owner.display_name;
-      existingPlaylist.tracks = tracks;
-      existingPlaylist.moodCategories = clusterResult.categories;
-      existingPlaylist.totalTracks = tracks.length;
-      existingPlaylist.isProcessed = true;
-      existingPlaylist.processedAt = new Date();
-      await existingPlaylist.save();
-    } else {
-      existingPlaylist = await Playlist.create({
-        spotifyPlaylistId: playlistId,
-        name: playlistInfo.name,
-        description: playlistInfo.description,
-        imageUrl: playlistInfo.images?.[0]?.url,
-        owner: playlistInfo.owner.display_name,
-        totalTracks: tracks.length,
-        tracks,
-        moodCategories: clusterResult.categories,
-        isProcessed: true,
-        processedAt: new Date()
-      });
-    }
+    // Build playlist data object
+    const playlistData = {
+      id: playlistId,
+      spotifyPlaylistId: playlistId,
+      name: playlistInfo.name,
+      description: playlistInfo.description,
+      imageUrl: playlistInfo.images?.[0]?.url,
+      owner: playlistInfo.owner.display_name,
+      totalTracks: tracks.length,
+      tracks,
+      moodCategories: clusterResult.categories,
+      processedAt: new Date()
+    };
+
+    // Store in memory cache
+    playlistCache.set(playlistId, playlistData);
 
     res.json({
-      playlistId: existingPlaylist._id,
-      name: existingPlaylist.name,
-      description: existingPlaylist.description,
-      imageUrl: existingPlaylist.imageUrl,
-      owner: existingPlaylist.owner,
+      playlistId: playlistId,
+      name: playlistData.name,
+      description: playlistData.description,
+      imageUrl: playlistData.imageUrl,
+      owner: playlistData.owner,
       trackCount: tracks.length,
       status: 'processed',
       moodCategories: Object.fromEntries(
@@ -166,63 +134,46 @@ router.post('/analyze', async (req, res) => {
   }
 });
 
-// Get recently analyzed playlists
-router.get('/recent', async (req, res) => {
-  try {
-    const playlists = await Playlist.find({ isProcessed: true })
-      .select('name spotifyPlaylistId totalTracks imageUrl owner processedAt')
-      .sort({ processedAt: -1 })
-      .limit(10);
-
-    res.json(playlists);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to get playlists' });
-  }
-});
-
 // Get specific playlist with mood breakdown
 router.get('/:id', async (req, res) => {
-  if (!isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid playlist ID' });
+  const playlistId = req.params.id;
+  
+  // Check in-memory cache
+  const playlist = playlistCache.get(playlistId);
+
+  if (!playlist) {
+    return res.status(404).json({ error: 'Playlist not found. Please analyze a playlist first.' });
   }
 
-  try {
-    const playlist = await Playlist.findById(req.params.id);
+  // Get mood category counts
+  const moodBreakdown = {};
+  const categoryOrder = [
+    'happy_energetic', 'calm_peaceful', 'melancholic', 'party_dance',
+    'romantic', 'motivational', 'chill_ambient', 'intense_aggressive'
+  ];
 
-    if (!playlist) {
-      return res.status(404).json({ error: 'Playlist not found' });
-    }
-
-    // Get mood category counts
-    const moodBreakdown = {};
-    const categoryOrder = [
-      'happy_energetic', 'calm_peaceful', 'melancholic', 'party_dance',
-      'romantic', 'motivational', 'chill_ambient', 'intense_aggressive'
-    ];
-
-    for (const category of categoryOrder) {
-      const trackIds = playlist.moodCategories?.get(category) || [];
-      moodBreakdown[category] = {
-        count: trackIds.length,
-        tracks: playlist.tracks.filter(t => trackIds.includes(t.spotifyTrackId)).slice(0, 5)
-      };
-    }
-
-    res.json({
-      id: playlist._id,
-      _id: playlist._id,  // Include both for compatibility
-      spotifyPlaylistId: playlist.spotifyPlaylistId,
-      name: playlist.name,
-      description: playlist.description,
-      imageUrl: playlist.imageUrl,
-      owner: playlist.owner,
-      totalTracks: playlist.totalTracks,
-      moodBreakdown,
-      processedAt: playlist.processedAt
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to get playlist' });
+  for (const category of categoryOrder) {
+    const trackIds = playlist.moodCategories?.[category] || [];
+    moodBreakdown[category] = {
+      count: trackIds.length,
+      tracks: playlist.tracks.filter(t => trackIds.includes(t.spotifyTrackId)).slice(0, 5)
+    };
   }
+
+  res.json({
+    id: playlist.id,
+    _id: playlist.id,  // Include both for compatibility
+    spotifyPlaylistId: playlist.spotifyPlaylistId,
+    name: playlist.name,
+    description: playlist.description,
+    imageUrl: playlist.imageUrl,
+    owner: playlist.owner,
+    totalTracks: playlist.totalTracks,
+    moodBreakdown,
+    processedAt: playlist.processedAt
+  });
 });
 
+// Export playlistCache for use in recommendations route
 module.exports = router;
+module.exports.playlistCache = playlistCache;

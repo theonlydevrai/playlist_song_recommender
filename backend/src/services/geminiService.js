@@ -1,6 +1,7 @@
-const axios = require('axios');
+const axios = require("axios");
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 class GeminiService {
   constructor() {
@@ -44,41 +45,39 @@ Analyze this mood and provide musical recommendations in this exact JSON format:
         {
           contents: [
             {
-              parts: [
-                { text: systemPrompt + '\n\n' + userPrompt }
-              ]
-            }
+              parts: [{ text: systemPrompt + "\n\n" + userPrompt }],
+            },
           ],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 1024
-          }
+            maxOutputTokens: 1024,
+          },
         },
         {
           headers: {
-            'Content-Type': 'application/json'
-          }
+            "Content-Type": "application/json",
+          },
         }
       );
 
       const textResponse = response.data.candidates[0].content.parts[0].text;
-      
+
       // Clean the response - remove markdown code blocks if present
       let cleanedResponse = textResponse.trim();
-      if (cleanedResponse.startsWith('```json')) {
+      if (cleanedResponse.startsWith("```json")) {
         cleanedResponse = cleanedResponse.slice(7);
       }
-      if (cleanedResponse.startsWith('```')) {
+      if (cleanedResponse.startsWith("```")) {
         cleanedResponse = cleanedResponse.slice(3);
       }
-      if (cleanedResponse.endsWith('```')) {
+      if (cleanedResponse.endsWith("```")) {
         cleanedResponse = cleanedResponse.slice(0, -3);
       }
       cleanedResponse = cleanedResponse.trim();
 
       return JSON.parse(cleanedResponse);
     } catch (error) {
-      console.error('Gemini API error:', error.response?.data || error.message);
+      console.error("Gemini API error:", error.response?.data || error.message);
       // Return a default analysis if Gemini fails
       return this.getDefaultMoodAnalysis(moodDescription);
     }
@@ -89,9 +88,11 @@ Analyze this mood and provide musical recommendations in this exact JSON format:
     // Take a sample of tracks for analysis (max 30 to avoid token limits)
     const sampleSize = Math.min(tracks.length, 30);
     const sample = tracks.slice(0, sampleSize);
-    
-    const trackList = sample.map(t => `"${t.name}" by ${t.artist}`).join('\n');
-    
+
+    const trackList = sample
+      .map((t) => `"${t.name}" by ${t.artist}`)
+      .join("\n");
+
     const prompt = `You are a music expert. Analyze these songs and estimate their mood characteristics.
 
 Songs:
@@ -113,22 +114,25 @@ Respond ONLY with a JSON array, no explanation:
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 4096
-          }
+            maxOutputTokens: 4096,
+          },
         },
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      let textResponse = response.data.candidates[0].content.parts[0].text.trim();
-      
+      let textResponse =
+        response.data.candidates[0].content.parts[0].text.trim();
+
       // Clean markdown
-      if (textResponse.startsWith('```json')) textResponse = textResponse.slice(7);
-      if (textResponse.startsWith('```')) textResponse = textResponse.slice(3);
-      if (textResponse.endsWith('```')) textResponse = textResponse.slice(0, -3);
+      if (textResponse.startsWith("```json"))
+        textResponse = textResponse.slice(7);
+      if (textResponse.startsWith("```")) textResponse = textResponse.slice(3);
+      if (textResponse.endsWith("```"))
+        textResponse = textResponse.slice(0, -3);
       textResponse = textResponse.trim();
 
       const analysis = JSON.parse(textResponse);
-      
+
       // Map analysis back to tracks
       const trackMoodMap = {};
       for (const item of analysis) {
@@ -136,13 +140,13 @@ Respond ONLY with a JSON array, no explanation:
           energy: item.energy || 0.5,
           valence: item.valence || 0.5,
           danceability: item.danceability || 0.5,
-          category: item.category || 'calm_peaceful'
+          category: item.category || "calm_peaceful",
         };
       }
-      
+
       return trackMoodMap;
     } catch (error) {
-      console.error('Gemini track analysis error:', error.message);
+      console.error("Gemini track analysis error:", error.message);
       return null;
     }
   }
@@ -150,23 +154,46 @@ Respond ONLY with a JSON array, no explanation:
   getDefaultMoodAnalysis(moodDescription) {
     // Simple keyword-based fallback
     const lowerMood = moodDescription.toLowerCase();
-    
+
     const moodKeywords = {
-      happy_energetic: ['happy', 'excited', 'joy', 'celebrate', 'pumped', 'great'],
-      calm_peaceful: ['calm', 'peaceful', 'relax', 'chill', 'unwind', 'serene'],
-      melancholic: ['sad', 'down', 'depressed', 'lonely', 'miss', 'heartbreak', 'breakup'],
-      party_dance: ['party', 'dance', 'club', 'fun', 'weekend'],
-      romantic: ['love', 'romantic', 'crush', 'date', 'tender'],
-      motivational: ['motivated', 'workout', 'gym', 'run', 'focus', 'work', 'study'],
-      chill_ambient: ['background', 'ambient', 'sleep', 'rest', 'quiet'],
-      intense_aggressive: ['angry', 'rage', 'intense', 'heavy', 'frustrated']
+      happy_energetic: [
+        "happy",
+        "excited",
+        "joy",
+        "celebrate",
+        "pumped",
+        "great",
+      ],
+      calm_peaceful: ["calm", "peaceful", "relax", "chill", "unwind", "serene"],
+      melancholic: [
+        "sad",
+        "down",
+        "depressed",
+        "lonely",
+        "miss",
+        "heartbreak",
+        "breakup",
+      ],
+      party_dance: ["party", "dance", "club", "fun", "weekend"],
+      romantic: ["love", "romantic", "crush", "date", "tender"],
+      motivational: [
+        "motivated",
+        "workout",
+        "gym",
+        "run",
+        "focus",
+        "work",
+        "study",
+      ],
+      chill_ambient: ["background", "ambient", "sleep", "rest", "quiet"],
+      intense_aggressive: ["angry", "rage", "intense", "heavy", "frustrated"],
     };
 
-    let detectedCategory = 'calm_peaceful';
+    let detectedCategory = "calm_peaceful";
     let maxMatches = 0;
 
     for (const [category, keywords] of Object.entries(moodKeywords)) {
-      const matches = keywords.filter(kw => lowerMood.includes(kw)).length;
+      const matches = keywords.filter((kw) => lowerMood.includes(kw)).length;
       if (matches > maxMatches) {
         maxMatches = matches;
         detectedCategory = category;
@@ -181,25 +208,25 @@ Respond ONLY with a JSON array, no explanation:
       romantic: { energy: 4, valence: 7 },
       motivational: { energy: 8, valence: 7 },
       chill_ambient: { energy: 2, valence: 5 },
-      intense_aggressive: { energy: 9, valence: 3 }
+      intense_aggressive: { energy: 9, valence: 3 },
     };
 
     const defaults = categoryDefaults[detectedCategory];
 
     return {
-      emotions: [detectedCategory.replace('_', ' ')],
+      emotions: [detectedCategory.replace("_", " ")],
       energy_level: defaults.energy,
       valence_level: defaults.valence,
       intensity: 5,
       context: moodDescription,
       music_characteristics: {
-        tempo_preference: defaults.energy > 6 ? 'fast' : 'slow',
-        energy_preference: defaults.energy > 6 ? 'high' : 'low',
-        danceability_preference: defaults.energy > 6 ? 'high' : 'low',
-        acousticness_preference: defaults.energy < 5 ? 'high' : 'low'
+        tempo_preference: defaults.energy > 6 ? "fast" : "slow",
+        energy_preference: defaults.energy > 6 ? "high" : "low",
+        danceability_preference: defaults.energy > 6 ? "high" : "low",
+        acousticness_preference: defaults.energy < 5 ? "high" : "low",
       },
       mood_category: detectedCategory,
-      confidence: 0.5
+      confidence: 0.5,
     };
   }
 
@@ -211,21 +238,21 @@ Respond ONLY with a JSON array, no explanation:
           contents: [
             {
               parts: [
-                { 
+                {
                   text: `Generate a short, creative playlist description (max 100 characters) for a mood-based playlist. 
                   Mood: "${moodInput}"
                   Tracks: ${trackCount}
                   Duration: ${Math.round(totalDuration / 60000)} minutes
                   
-                  Respond with ONLY the description text, no quotes.`
-                }
-              ]
-            }
+                  Respond with ONLY the description text, no quotes.`,
+                },
+              ],
+            },
           ],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 100
-          }
+            maxOutputTokens: 100,
+          },
         }
       );
 

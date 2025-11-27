@@ -10,7 +10,6 @@ Before starting, make sure you have:
 
 - **Node.js 18+** - [Download here](https://nodejs.org/)
 - **Python 3.9+** - [Download here](https://python.org/)
-- **MongoDB Compass** - [Download here](https://www.mongodb.com/try/download/compass) (Recommended)
 - **Git** - [Download here](https://git-scm.com/)
 - **A Google Account** (for Gemini API)
 
@@ -45,81 +44,6 @@ Before starting, make sure you have:
 4. Select a project (or create new one)
 5. **Copy and save the API key**
 
-### 1.3 MongoDB Setup (Choose ONE option)
-
-#### Option A: MongoDB Compass (Recommended - Desktop App)
-
-MongoDB Compass is the easiest way to run MongoDB locally with a nice GUI.
-
-1. Download [MongoDB Compass](https://www.mongodb.com/try/download/compass)
-2. Install with default settings
-3. Open MongoDB Compass
-4. On first launch, it will prompt to connect
-5. Use the default connection string: `mongodb://localhost:27017`
-6. Click **"Connect"**
-7. MongoDB Compass will automatically start a local MongoDB instance
-
-**Your connection string for .env:**
-
-```
-mongodb://localhost:27017/spotify_mood_recommender
-```
-
-**Note:** Make sure MongoDB Compass is running when you start the app!
-
-#### Option B: MongoDB Atlas (Cloud - Free Tier)
-
-Best if you want your data accessible from anywhere.
-
-1. Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-2. Click **"Try Free"** and create an account
-3. Create a new cluster:
-   - Choose **FREE Shared** tier
-   - Select a region close to you
-   - Click **"Create Cluster"** (takes 1-3 minutes)
-4. Setup Database Access:
-   - Go to **"Database Access"** in sidebar
-   - Click **"Add New Database User"**
-   - Choose **"Password"** authentication
-   - Enter username: `spotifyapp`
-   - Enter password: `your-secure-password` (save this!)
-   - Click **"Add User"**
-5. Setup Network Access:
-   - Go to **"Network Access"** in sidebar
-   - Click **"Add IP Address"**
-   - Click **"Allow Access from Anywhere"** (or add your IP)
-   - Click **"Confirm"**
-6. Get Connection String:
-   - Go to **"Database"** in sidebar
-   - Click **"Connect"** on your cluster
-   - Choose **"Connect your application"**
-   - Copy the connection string (looks like):
-     ```
-     mongodb+srv://spotifyapp:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
-     ```
-   - **Replace `<password>` with your actual password**
-   - **Add database name**: `spotify_mood_recommender` after `.net/`
-
-**Your connection string for .env:**
-
-```
-mongodb+srv://spotifyapp:yourpassword@cluster0.xxxxx.mongodb.net/spotify_mood_recommender?retryWrites=true&w=majority
-```
-
-#### Option C: MongoDB Community Server (Local Installation)
-
-For advanced users who want full control.
-
-1. Download [MongoDB Community Server](https://www.mongodb.com/try/download/community)
-2. Install with default settings (includes MongoDB as a Windows Service)
-3. MongoDB runs automatically on startup
-
-**Your connection string for .env:**
-
-```
-mongodb://localhost:27017/spotify_mood_recommender
-```
-
 ---
 
 ## 📁 Step 2: Setup Environment Files
@@ -145,12 +69,6 @@ SPOTIFY_CLIENT_SECRET=paste_your_spotify_client_secret_here
 
 # Google Gemini API
 GEMINI_API_KEY=paste_your_gemini_api_key_here
-
-# MongoDB Configuration
-# For MongoDB Compass (local):
-MONGODB_URI=mongodb://localhost:27017/spotify_mood_recommender
-# For Atlas (cloud):
-# MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/spotify_mood_recommender
 
 # Server Configuration
 PORT=3001
@@ -268,14 +186,7 @@ You should see:
 
 ```
 Server running on port 3001
-Connected to MongoDB
 ```
-
-**If you see MongoDB connection error:**
-
-- Check your `MONGODB_URI` in `.env`
-- Make sure MongoDB Atlas allows your IP
-- Verify username/password are correct
 
 ### Terminal 2: Start ML Service (Port 5000)
 
@@ -321,36 +232,31 @@ You should see:
 
 1. Open your browser and go to: **http://localhost:3000**
 
-2. You should see the landing page with "Mood Mixer" and a green "Connect with Spotify" button
+2. You should see the landing page with "Mood Mixer"
 
-3. Click **"Connect with Spotify"**
-
-4. Log in with your Spotify account and authorize the app
-
-5. You'll be redirected to the Dashboard
+3. Paste a public Spotify playlist URL to get started
 
 ---
 
 ## Step 6: Using the App
 
-### Import a Playlist
+### Analyze a Playlist
 
-1. Go to Spotify and find a playlist you want to analyze
+1. Go to Spotify and find a public playlist you want to analyze
 2. Click **Share** → **Copy link to playlist**
-3. Paste the URL in the dashboard input box
+3. Paste the URL in the input box
 4. Click **"Analyze Playlist"**
 5. Wait for analysis (1-2 minutes for large playlists)
 
 ### Get Mood-Based Recommendations
 
-1. Click on an analyzed playlist
-2. See the mood breakdown of your songs
-3. Type how you're feeling in the text box
+1. After analyzing a playlist, you'll see the mood input screen
+2. Type how you're feeling in the text box
    - Examples: "feeling happy", "need to relax", "workout mode"
-4. Select duration (15min, 30min, 1hr, etc.)
-5. Click **"Get Recommendations"**
+3. Select duration (15min, 30min, 1hr, etc.)
+4. Click **"Generate Mix"**
 
-### Save to Spotify
+### Export to Spotify
 
 1. Review the recommended tracks
 2. Click **"Copy Track Names"** or **"Copy Spotify URIs"**
@@ -360,13 +266,6 @@ You should see:
 ---
 
 ## 🔧 Troubleshooting
-
-### "MongoDB connection error"
-
-- **MongoDB Compass**: Make sure Compass is open and connected before starting the backend
-- Verify your `MONGODB_URI` is correct in `backend/.env`
-- For Atlas: Check Network Access allows your IP
-- For Local: Make sure MongoDB service is running
 
 ### "Playlist not found" or "Cannot access playlist"
 
@@ -409,7 +308,6 @@ taskkill /PID <PID> /F
 | `SPOTIFY_CLIENT_ID`     | From Spotify Dashboard     | `abc123...`                           |
 | `SPOTIFY_CLIENT_SECRET` | From Spotify Dashboard     | `xyz789...`                           |
 | `GEMINI_API_KEY`        | From Google AI Studio      | `AIza...`                             |
-| `MONGODB_URI`           | Database connection string | `mongodb://localhost:27017/...`       |
 | `PORT`                  | Backend server port        | `3001`                                |
 | `FRONTEND_URL`          | Frontend URL for CORS      | `http://localhost:3000`               |
 | `ML_SERVICE_URL`        | Python ML service URL      | `http://localhost:5000`               |
@@ -470,7 +368,6 @@ Double-click this file to start all services at once!
 
 - [ ] Installed Node.js 18+
 - [ ] Installed Python 3.9+
-- [ ] Installed MongoDB Compass (and connected)
 - [ ] Created Spotify Developer App
 - [ ] Got Spotify Client ID and Secret
 - [ ] Created Google Gemini API Key
@@ -479,9 +376,7 @@ Double-click this file to start all services at once!
 - [ ] Installed frontend dependencies (`npm install`)
 - [ ] Created Python virtual environment (`python -m venv venv`)
 - [ ] Installed ML service dependencies (`pip install -r requirements.txt`)
-- [ ] Started MongoDB Compass and connected
 - [ ] Started all three services (backend, ml-service, frontend)
-- [ ] Successfully logged in with Spotify
 - [ ] Analyzed first playlist
 
 ---
