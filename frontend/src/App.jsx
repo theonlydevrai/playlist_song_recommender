@@ -73,19 +73,19 @@ export default function App() {
   } : { count: 0, duration: 0, score: 0 }
 
   return (
-    <div className="h-screen flex flex-col bg-surface-950 overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#0a0a0a] overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-surface-800 px-4 py-2">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <button onClick={resetAll} className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-accent-coral to-amber rounded-lg flex items-center justify-center">
-              <Music2 className="w-4 h-4 text-surface-950" />
+      <header className="flex-shrink-0 border-b border-[#404040]/20 px-6 py-3 bg-[#0f0f0f]/95">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
+          <button onClick={resetAll} className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#141414] border border-[#404040]/30 rounded-xl flex items-center justify-center">
+              <Music2 className="w-5 h-5 text-[#9a9a9a]" />
             </div>
-            <span className="font-semibold text-text-primary">Mood Mixer</span>
+            <span className="font-medium text-[#f5f5f5] text-lg">Mood Mixer</span>
           </button>
           {showResults && (
-            <button onClick={resetAll} className="text-xs px-3 py-1.5 rounded-lg bg-surface-850 text-surface-400 hover:text-text-primary border border-surface-700 flex items-center gap-1.5">
-              <RotateCcw className="w-3 h-3" /> New
+            <button onClick={resetAll} className="px-4 py-2 rounded-lg bg-[#141414] text-[#9a9a9a] hover:text-[#f5f5f5] border border-[#404040]/30 flex items-center gap-2 transition-colors">
+              <RotateCcw className="w-4 h-4" /> New Mix
             </button>
           )}
         </div>
@@ -95,35 +95,43 @@ export default function App() {
       <main className="flex-1 overflow-hidden">
         {/* Input Form */}
         {!showResults && !loading && (
-          <div className="h-full flex items-center justify-center p-4">
-            <form onSubmit={handleGenerateMix} className="w-full max-w-md space-y-4">
-              <div className="text-center mb-6">
-                <h1 className="text-2xl font-bold text-text-primary">Create your perfect mix</h1>
-                <p className="text-surface-400 text-sm mt-1">Paste playlist, describe mood, get recommendations</p>
+          <div className="h-full flex items-center justify-center p-6">
+            <form onSubmit={handleGenerateMix} className="w-full max-w-xl space-y-6">
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-semibold text-[#f5f5f5] mb-2">Create your perfect mix</h1>
+                <p className="text-[#707070] text-base">Paste a playlist, describe your mood, get personalized recommendations</p>
               </div>
 
-              <input
-                type="text"
-                value={playlistUrl}
-                onChange={(e) => setPlaylistUrl(e.target.value)}
-                placeholder="Spotify playlist URL..."
-                className="w-full rounded-xl px-4 py-3 text-sm bg-surface-850 border border-surface-700 text-text-primary placeholder-surface-500 focus:border-accent-coral focus:outline-none"
-              />
+              <div className="space-y-2">
+                <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
+                  <Music2 className="w-4 h-4" /> Spotify Playlist URL
+                </label>
+                <input
+                  type="text"
+                  value={playlistUrl}
+                  onChange={(e) => setPlaylistUrl(e.target.value)}
+                  placeholder="https://open.spotify.com/playlist/..."
+                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#707070] focus:outline-none transition-colors"
+                />
+              </div>
 
-              <div>
+              <div className="space-y-2">
+                <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
+                  <Zap className="w-4 h-4" /> Describe your vibe
+                </label>
                 <textarea
                   value={moodInput}
                   onChange={(e) => setMoodInput(e.target.value)}
-                  placeholder="Describe your vibe..."
-                  className="w-full rounded-xl px-4 py-3 text-sm bg-surface-850 border border-surface-700 text-text-primary placeholder-surface-500 focus:border-accent-coral focus:outline-none resize-none h-16"
+                  placeholder="e.g., feeling chill and want something relaxing..."
+                  className="w-full rounded-xl px-5 py-4 text-base bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#707070] focus:outline-none resize-none h-24 transition-colors"
                 />
-                <div className="flex gap-1.5 mt-2">
-                  {['energetic', 'chill', 'focus', 'sad'].map((mood) => (
+                <div className="flex gap-2 mt-3">
+                  {['energetic', 'chill', 'focus', 'melancholic'].map((mood) => (
                     <button
                       key={mood}
                       type="button"
                       onClick={() => setMoodInput(mood)}
-                      className={`text-xs px-3 py-1 rounded-lg border ${moodInput === mood ? 'bg-accent-coral/20 border-accent-coral/50 text-accent-coral' : 'bg-surface-850 border-surface-700 text-surface-400'}`}
+                      className={`text-sm px-4 py-2 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#141414] border-[#9a9a9a]/50 text-[#f5f5f5]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a]'}`}
                     >
                       {mood}
                     </button>
@@ -131,37 +139,39 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-surface-500" />
-                <div className="flex gap-1.5 flex-1">
+              <div className="space-y-2">
+                <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> Duration
+                </label>
+                <div className="flex gap-2">
                   {DURATION_OPTIONS.map((d) => (
                     <button
                       key={d}
                       type="button"
                       onClick={() => setDuration(d)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium ${duration === d ? 'bg-mint/20 text-mint border border-mint/30' : 'bg-surface-850 text-surface-400 border border-surface-700'}`}
+                      className={`flex-1 py-3 rounded-xl text-sm font-medium transition-colors ${duration === d ? 'bg-[#141414] text-[#f5f5f5] border border-[#9a9a9a]/50' : 'bg-[#0f0f0f] text-[#707070] border border-[#404040]/30 hover:text-[#9a9a9a]'}`}
                     >
-                      {d}m
+                      {d} min
                     </button>
                   ))}
                 </div>
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 text-accent-coral text-xs bg-accent-coral/10 rounded-lg px-3 py-2">
-                  <AlertCircle className="w-4 h-4" /> {error}
+                <div className="flex items-center gap-3 text-[#FB7185] text-sm bg-[#FB7185]/10 rounded-xl px-4 py-3 border border-[#FB7185]/20">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" /> {error}
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={!playlistUrl.trim() || !moodInput.trim()}
-                className="w-full bg-gradient-to-r from-accent-coral to-amber disabled:from-surface-700 disabled:to-surface-700 disabled:text-surface-500 text-surface-950 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 text-sm"
+                className="w-full bg-[#141414] hover:bg-[#1a1a1a] disabled:bg-[#0f0f0f] disabled:text-[#5a5a5a] text-[#f5f5f5] font-medium py-4 rounded-xl flex items-center justify-center gap-3 text-base border border-[#404040]/30 hover:border-[#707070]/50 disabled:border-[#404040]/20 transition-colors"
               >
-                <Send className="w-4 h-4" /> Generate Mix
+                <Send className="w-5 h-5" /> Generate Mix
               </button>
               
-              <p className="text-center text-surface-600 text-xs">No login needed · Public playlists only</p>
+              <p className="text-center text-[#5a5a5a] text-sm">No login required · Works with public playlists only</p>
             </form>
           </div>
         )}
@@ -169,8 +179,8 @@ export default function App() {
         {/* Loading */}
         {loading && (
           <div className="h-full flex flex-col items-center justify-center">
-            <Loader2 className="w-10 h-10 text-accent-coral animate-spin mb-4" />
-            <p className="text-surface-400">{loadingStatus}</p>
+            <Loader2 className="w-12 h-12 text-[#9a9a9a] animate-spin mb-4" />
+            <p className="text-[#707070] text-lg">{loadingStatus}</p>
           </div>
         )}
 
@@ -180,45 +190,45 @@ export default function App() {
             {/* Stats Row */}
             <div className="flex-shrink-0 flex items-center justify-between mb-3">
               <div className="flex items-center gap-4 text-sm">
-                <span className="flex items-center gap-1.5 text-surface-400">
-                  <ListMusic className="w-4 h-4 text-sky" /> {metrics.count} tracks
+                <span className="flex items-center gap-1.5 text-[#707070]">
+                  <ListMusic className="w-4 h-4 text-[#9a9a9a]" /> {metrics.count} tracks
                 </span>
-                <span className="flex items-center gap-1.5 text-surface-400">
-                  <Clock className="w-4 h-4 text-accent-coral" /> {metrics.duration}m
+                <span className="flex items-center gap-1.5 text-[#707070]">
+                  <Clock className="w-4 h-4 text-[#9a9a9a]" /> {metrics.duration}m
                 </span>
-                <span className="flex items-center gap-1.5 text-mint">
+                <span className="flex items-center gap-1.5 text-[#9a9a9a]">
                   <Zap className="w-4 h-4" /> {metrics.score}% match
                 </span>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => copyToClipboard('names')} className="text-xs px-3 py-1.5 rounded-lg bg-surface-850 border border-surface-700 text-surface-400 hover:text-text-primary flex items-center gap-1.5">
-                  {copied === 'names' ? <Check className="w-3 h-3 text-mint" /> : <Copy className="w-3 h-3" />} Names
+                <button onClick={() => copyToClipboard('names')} className="text-xs px-3 py-1.5 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#f5f5f5] flex items-center gap-1.5 transition-colors">
+                  {copied === 'names' ? <Check className="w-3 h-3 text-[#9a9a9a]" /> : <Copy className="w-3 h-3" />} Names
                 </button>
-                <button onClick={() => copyToClipboard('uris')} className="text-xs px-3 py-1.5 rounded-lg bg-accent-coral/20 border border-accent-coral/30 text-accent-coral flex items-center gap-1.5">
+                <button onClick={() => copyToClipboard('uris')} className="text-xs px-3 py-1.5 rounded-lg bg-[#141414] border border-[#9a9a9a]/30 text-[#9a9a9a] hover:text-[#f5f5f5] flex items-center gap-1.5 transition-colors">
                   {copied === 'uris' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} URIs
                 </button>
               </div>
             </div>
 
             {/* Track List */}
-            <div className="flex-1 overflow-y-auto rounded-xl bg-surface-900 border border-surface-800">
+            <div className="flex-1 overflow-y-auto rounded-lg bg-[#0f0f0f]/95 border border-[#404040]/20">
               {session.recommendations?.map((track, i) => (
-                <div key={track.trackId || i} className="flex items-center gap-3 px-3 py-2 hover:bg-surface-850 border-b border-surface-800/50 last:border-0">
-                  <span className="w-5 text-center text-surface-600 text-xs">{i + 1}</span>
+                <div key={track.trackId || i} className="flex items-center gap-3 px-3 py-2 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors">
+                  <span className="w-5 text-center text-[#5a5a5a] text-xs">{i + 1}</span>
                   {track.albumImage ? (
                     <img src={track.albumImage} alt="" className="w-9 h-9 rounded object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded bg-surface-800 flex items-center justify-center">
-                      <Music2 className="w-4 h-4 text-surface-600" />
+                    <div className="w-9 h-9 rounded bg-[#141414] flex items-center justify-center">
+                      <Music2 className="w-4 h-4 text-[#5a5a5a]" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-text-primary text-sm truncate">{track.name}</p>
-                    <p className="text-surface-500 text-xs truncate">{track.artist}</p>
+                    <p className="text-[#f5f5f5] text-sm truncate">{track.name}</p>
+                    <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
                   </div>
-                  <span className="text-xs text-mint bg-mint/10 px-2 py-0.5 rounded">{track.moodScore || 0}%</span>
+                  <span className="text-xs text-[#9a9a9a] bg-[#141414] px-2 py-0.5 rounded border border-[#404040]/30">{track.moodScore || 0}%</span>
                   {track.externalUrl && (
-                    <a href={track.externalUrl} target="_blank" rel="noopener noreferrer" className="text-surface-600 hover:text-accent-coral">
+                    <a href={track.externalUrl} target="_blank" rel="noopener noreferrer" className="text-[#5a5a5a] hover:text-[#9a9a9a] transition-colors">
                       <ExternalLink className="w-4 h-4" />
                     </a>
                   )}
