@@ -1,10 +1,10 @@
-# Spotify Mood Recommender - Complete Setup Guide
+# 🎵 Spotify Mood Recommender - Complete Setup Guide
 
 A step-by-step guide to get the app running on your machine.
 
 ---
 
-## Prerequisites
+## 📋 Prerequisites
 
 Before starting, make sure you have:
 
@@ -12,22 +12,21 @@ Before starting, make sure you have:
 - **Python 3.9+** - [Download here](https://python.org/)
 - **MongoDB Compass** - [Download here](https://www.mongodb.com/try/download/compass) (Recommended)
 - **Git** - [Download here](https://git-scm.com/)
-- **A Spotify Account** (free or premium)
 - **A Google Account** (for Gemini API)
 
 ---
 
-## Step 1: Get API Credentials
+## 🚀 Step 1: Get API Credentials
 
 ### 1.1 Spotify API Setup
 
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Log in with your Spotify account
+2. Log in with your Spotify account (create one if needed)
 3. Click **"Create App"**
 4. Fill in the details:
    - **App name**: `Mood Recommender` (or any name)
    - **App description**: `AI-powered mood-based playlist generator`
-   - **Redirect URI**: `http://localhost:3001/auth/callback`
+   - **Redirect URI**: `http://localhost:3001/callback` (required but not used)
    - **Which APIs?**: Select **Web API**
    - Check the Terms of Service box
 5. Click **"Save"**
@@ -35,6 +34,8 @@ Before starting, make sure you have:
 7. **Copy and save these values:**
    - `Client ID` (visible on the page)
    - `Client Secret` (click "View client secret")
+
+> ℹ️ **Note:** We use Client Credentials Flow (no user login). The redirect URI is required by Spotify but won't be used.
 
 ### 1.2 Google Gemini API Setup
 
@@ -121,7 +122,7 @@ mongodb://localhost:27017/spotify_mood_recommender
 
 ---
 
-## Step 2: Setup Environment Files
+## 📁 Step 2: Setup Environment Files
 
 ### 2.1 Backend Environment File
 
@@ -138,22 +139,18 @@ notepad .env
 **Or manually create** `backend\.env` with this content:
 
 ```env
-# Spotify API Configuration
+# Spotify API Configuration (Client Credentials - No user login needed)
 SPOTIFY_CLIENT_ID=paste_your_spotify_client_id_here
 SPOTIFY_CLIENT_SECRET=paste_your_spotify_client_secret_here
-SPOTIFY_REDIRECT_URI=http://localhost:3001/auth/callback
 
 # Google Gemini API
 GEMINI_API_KEY=paste_your_gemini_api_key_here
 
 # MongoDB Configuration
+# For MongoDB Compass (local):
+MONGODB_URI=mongodb://localhost:27017/spotify_mood_recommender
 # For Atlas (cloud):
-MONGODB_URI=mongodb+srv://spotifyapp:yourpassword@cluster0.xxxxx.mongodb.net/spotify_mood_recommender?retryWrites=true&w=majority
-# For Local MongoDB:
-# MONGODB_URI=mongodb://localhost:27017/spotify_mood_recommender
-
-# JWT Secret (generate a random string)
-JWT_SECRET=my-super-secret-jwt-key-change-this-to-something-random
+# MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/spotify_mood_recommender
 
 # Server Configuration
 PORT=3001
@@ -166,7 +163,7 @@ FRONTEND_URL=http://localhost:3000
 ML_SERVICE_URL=http://localhost:5000
 ```
 
-**Important: Replace ALL placeholder values with your actual credentials!**
+**⚠️ Important: Replace ALL placeholder values with your actual credentials!**
 
 ### 2.2 ML Service Environment File (Optional)
 
@@ -356,13 +353,13 @@ You should see:
 ### Save to Spotify
 
 1. Review the recommended tracks
-2. Give your playlist a name (optional)
-3. Click **"Save to Spotify"**
-4. Open Spotify - your new playlist is there!
+2. Click **"Copy Track Names"** or **"Copy Spotify URIs"**
+3. Open Spotify and create a new playlist
+4. Search for the tracks or paste URIs to add them
 
 ---
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
 ### "MongoDB connection error"
 
@@ -371,11 +368,11 @@ You should see:
 - For Atlas: Check Network Access allows your IP
 - For Local: Make sure MongoDB service is running
 
-### "Spotify authentication failed"
+### "Playlist not found" or "Cannot access playlist"
 
-- Check `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`
-- Verify redirect URI is exactly `http://localhost:3001/auth/callback`
-- Make sure you added the redirect URI in Spotify Dashboard
+- Make sure the playlist is **public** (not private)
+- Check the URL is correct and complete
+- The playlist owner may have changed its visibility
 
 ### "Gemini API error" or mood analysis fails
 
@@ -405,16 +402,14 @@ taskkill /PID <PID> /F
 
 ---
 
-## Environment Variables Reference
+## 📊 Environment Variables Reference
 
 | Variable                | Description                | Example                               |
 | ----------------------- | -------------------------- | ------------------------------------- |
 | `SPOTIFY_CLIENT_ID`     | From Spotify Dashboard     | `abc123...`                           |
 | `SPOTIFY_CLIENT_SECRET` | From Spotify Dashboard     | `xyz789...`                           |
-| `SPOTIFY_REDIRECT_URI`  | OAuth callback URL         | `http://localhost:3001/auth/callback` |
 | `GEMINI_API_KEY`        | From Google AI Studio      | `AIza...`                             |
-| `MONGODB_URI`           | Database connection string | `mongodb+srv://...`                   |
-| `JWT_SECRET`            | Random secret for sessions | `any-random-string`                   |
+| `MONGODB_URI`           | Database connection string | `mongodb://localhost:27017/...`       |
 | `PORT`                  | Backend server port        | `3001`                                |
 | `FRONTEND_URL`          | Frontend URL for CORS      | `http://localhost:3000`               |
 | `ML_SERVICE_URL`        | Python ML service URL      | `http://localhost:5000`               |
@@ -490,3 +485,4 @@ Double-click this file to start all services at once!
 - [ ] Analyzed first playlist
 
 ---
+

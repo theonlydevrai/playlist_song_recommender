@@ -89,30 +89,37 @@ class MLService {
     const energyLevel = moodAnalysis.energy_level / 10;
     const valenceLevel = moodAnalysis.valence_level / 10;
 
+    console.log(`Target mood: ${targetCategory}, energy: ${energyLevel}, valence: ${valenceLevel}`);
+    console.log(`Target duration: ${targetDuration}ms (${Math.round(targetDuration/60000)} min)`);
+
     // Score each track based on mood match
     const scoredTracks = tracks.map(track => {
       let score = 0;
-      const f = track.audioFeatures;
-
-      if (!f) return { ...track, moodScore: 0 };
+      const f = track.audioFeatures || {};
 
       // Category match bonus
       if (track.moodCategory === targetCategory) {
         score += 50;
       }
 
-      // Energy similarity
-      const energyDiff = Math.abs(f.energy - energyLevel);
+      // Energy similarity (default to 0.5 if missing)
+      const trackEnergy = f.energy ?? 0.5;
+      const energyDiff = Math.abs(trackEnergy - energyLevel);
       score += (1 - energyDiff) * 20;
 
-      // Valence similarity
-      const valenceDiff = Math.abs(f.valence - valenceLevel);
+      // Valence similarity (default to 0.5 if missing)
+      const trackValence = f.valence ?? 0.5;
+      const valenceDiff = Math.abs(trackValence - valenceLevel);
       score += (1 - valenceDiff) * 20;
 
       // Danceability consideration
-      if (moodAnalysis.music_characteristics?.danceability_preference === 'high' && f.danceability > 0.6) {
+      const trackDanceability = f.danceability ?? 0.5;
+      if (moodAnalysis.music_characteristics?.danceability_preference === 'high' && trackDanceability > 0.6) {
         score += 10;
       }
+
+      // Base score for all tracks (ensure minimum score)
+      score += 10;
 
       return {
         ...track,
@@ -129,38 +136,79 @@ class MLService {
     const artistCount = {};
     const tolerance = 5 * 60 * 1000; // 5 minutes tolerance
 
+    // Lower threshold to include more tracks
+    const minScore = 20;
+
     for (const track of scoredTracks) {
-      if (track.moodScore < 30) continue; // Skip low-scoring tracks
+      if (track.moodScore < minScore) continue;
 
-      // Artist diversity check
-      if (artistCount[track.artist] >= 2) continue;
+      // Artist diversity check (allow up to 3 songs per artist)
+      const artistKey = track.artist || 'unknown';
+      if (artistCount[artistKey] >= 3) continue;
 
-      // Duration check
-      if (totalDuration + track.duration_ms > targetDuration + tolerance) {
+      // Get track duration, default to 3.5 minutes if missing
+      const trackDuration = track.duration_ms || 210000;
+
+      // Check if we've reached target duration
+      if (totalDuration >= targetDuration) {
+        break;
+      }
+
+      // Allow going slightly over target
+      if (totalDuration + trackDuration > targetDuration + tolerance && selected.length > 0) {
         continue;
       }
 
       selected.push({
         trackId: track.spotifyTrackId,
-        name: track.name,
-        artist: track.artist,
-        album: track.album,
+        name: track.name || 'Unknown Track',
+        artist: track.artist || 'Unknown Artist',
+        album: track.album || 'Unknown Album',
         albumImage: track.albumImage,
-        duration_ms: track.duration_ms,
+        duration_ms: trackDuration,
         previewUrl: track.previewUrl,
         externalUrl: track.externalUrl,
         moodScore: track.moodScore,
         reason: this.generateReason(track, targetCategory)
       });
 
-      totalDuration += track.duration_ms;
-      artistCount[track.artist] = (artistCount[track.artist] || 0) + 1;
+      totalDuration += trackDuration;
+      artistCount[artistKey] = (artistCount[artistKey] || 0) + 1;
+    }
 
-      // Stop if we're close enough to target
-      if (Math.abs(totalDuration - targetDuration) <= tolerance) {
-        break;
+    // If we still don't have enough tracks, lower threshold further
+    if (totalDuration < targetDuration * 0.5 && selected.length < scoredTracks.length) {
+      console.log(`Not enough tracks (${Math.round(totalDuration/60000)} min), adding more...`);
+      
+      for (const track of scoredTracks) {
+        if (totalDuration >= targetDuration) break;
+        
+        // Skip already selected
+        if (selected.find(s => s.trackId === track.spotifyTrackId)) continue;
+        
+        const trackDuration = track.duration_ms || 210000;
+        
+        selected.push({
+          trackId: track.spotifyTrackId,
+          name: track.name || 'Unknown Track',
+          artist: track.artist || 'Unknown Artist',
+          album: track.album || 'Unknown Album',
+          albumImage: track.albumImage,
+          duration_ms: trackDuration,
+          previewUrl: track.previewUrl,
+          externalUrl: track.externalUrl,
+          moodScore: track.moodScore,
+          reason: 'Added to fill duration'
+        });
+
+        totalDuration += trackDuration;
       }
     }
+
+    // Ensure totalDuration is a valid number
+    totalDuration = totalDuration || 0;
+
+    console.log(`Selected ${selected.length} tracks, total duration: ${Math.round(totalDuration/60000)} min`);
 
     return {
       tracks: selected,

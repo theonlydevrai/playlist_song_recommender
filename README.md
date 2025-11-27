@@ -1,21 +1,30 @@
-# Spotify Mood Recommender
+# 🎵 Spotify Mood Recommender
 
-An AI-powered web application that analyzes your Spotify playlists, categorizes songs by mood, and creates personalized playlists based on how you're feeling.
+An AI-powered web application that analyzes public Spotify playlists, categorizes songs by mood, and creates personalized recommendations based on how you're feeling.
 
 ![Node.js](https://img.shields.io/badge/Node.js-18+-green)
 ![Python](https://img.shields.io/badge/Python-3.9+-blue)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-## Features
+## ✨ Features
 
-- **AI Mood Analysis** - Describe your mood in natural language, powered by Google Gemini
-- **Smart Categorization** - Automatically groups songs into 8 mood categories
-- **Duration Matching** - Creates playlists that fit your exact time needs
-- **Spotify Integration** - Save generated playlists directly to your Spotify account
-- **History Tracking** - Access your past mood sessions anytime
+- **🔒 Privacy First** - No login required! Just paste a public playlist URL
+- **🎭 AI Mood Analysis** - Describe your mood in natural language, powered by Google Gemini
+- **📊 Smart Categorization** - Automatically groups songs into 8 mood categories
+- **⏱️ Duration Matching** - Creates playlists that fit your exact time needs
+- **📋 Easy Export** - Copy track names or Spotify URIs to add to your own playlists
 
-## Tech Stack
+## 🖼️ How It Works
+
+1. **Paste** a public Spotify playlist URL
+2. **Wait** for automatic mood analysis (1-2 min)
+3. **Describe** how you're feeling
+4. **Set** your desired playlist duration
+5. **Get** personalized song recommendations
+6. **Copy** and add tracks to your Spotify manually
+
+## 🏗️ Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -23,9 +32,9 @@ An AI-powered web application that analyzes your Spotify playlists, categorizes 
 | Backend | Node.js, Express, MongoDB |
 | ML Service | Python, Flask, scikit-learn |
 | AI | Google Gemini API |
-| Auth | Spotify OAuth 2.0 |
+| Spotify | Client Credentials Flow (no user auth) |
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 spotify_recommender/
@@ -38,8 +47,7 @@ spotify_recommender/
 ├── frontend/               # React application
 │   ├── src/
 │   │   ├── components/     # Reusable components
-│   │   ├── pages/          # Page components
-│   │   └── context/        # Auth context
+│   │   └── pages/          # Page components
 │   └── package.json
 ├── ml-service/             # Python ML service
 │   ├── app.py              # Flask server
@@ -48,13 +56,13 @@ spotify_recommender/
 └── start-app.bat           # Windows quick launcher
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
 - Python 3.9+
-- MongoDB (local or [Atlas](https://mongodb.com/atlas))
+- MongoDB Compass ([Download](https://www.mongodb.com/try/download/compass))
 - [Spotify Developer Account](https://developer.spotify.com/dashboard)
 - [Google AI Studio API Key](https://aistudio.google.com/app/apikey)
 
@@ -71,7 +79,7 @@ spotify_recommender/
    cd backend
    npm install
    cp .env.example .env
-   # Edit .env with your credentials
+   # Edit .env with your Spotify and Gemini API credentials
    ```
 
 3. **Setup Frontend**
@@ -100,13 +108,8 @@ spotify_recommender/
    ```env
    SPOTIFY_CLIENT_ID=your_spotify_client_id
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-   SPOTIFY_REDIRECT_URI=http://localhost:3001/auth/callback
    GEMINI_API_KEY=your_gemini_api_key
-   MONGODB_URI=your_mongodb_connection_string
-   JWT_SECRET=your_random_secret
-   PORT=3001
-   FRONTEND_URL=http://localhost:3000
-   ML_SERVICE_URL=http://localhost:5000
+   MONGODB_URI=mongodb://localhost:27017/spotify_mood_recommender
    ```
 
 ### Running the App
@@ -133,21 +136,32 @@ cd frontend && npm run dev
 
 6. **Open** http://localhost:3000
 
-## Detailed Setup
+## 📖 Detailed Setup
 
 See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for:
 - Step-by-step API credential setup
-- MongoDB Atlas configuration
+- MongoDB Compass configuration
 - Troubleshooting guide
-- Environment variables reference
 
-## How It Works
+## 🔒 Privacy
 
-1. **Connect** your Spotify account
-2. **Import** a playlist by pasting its URL
-3. **Wait** for automatic mood analysis (1-2 min)
-4. **Describe** how you're feeling
-5. **Set** your desired playlist duration
-6. **Get** personalized song recommendations
-7. **Save** the playlist to your Spotify
+This app is designed with privacy in mind:
+- **No user login required**
+- **No personal data collected**
+- **Only accesses public playlist data**
+- **No listening history tracked**
+- Uses Spotify's Client Credentials flow (app-level access only)
 
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🙏 Acknowledgments
+
+- [Spotify Web API](https://developer.spotify.com/documentation/web-api)
+- [Google Gemini API](https://ai.google.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)

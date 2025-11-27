@@ -31,14 +31,10 @@ const trackSchema = new mongoose.Schema({
 });
 
 const playlistSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
   spotifyPlaylistId: {
     type: String,
-    required: true
+    required: true,
+    unique: true
   },
   name: String,
   description: String,

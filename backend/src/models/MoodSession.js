@@ -1,16 +1,12 @@
 const mongoose = require('mongoose');
 
 const moodSessionSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
   playlistId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Playlist',
     required: true
   },
+  playlistName: String,
   moodInput: {
     type: String,
     required: true
@@ -34,16 +30,15 @@ const moodSessionSchema = new mongoose.Schema({
     trackId: String,
     name: String,
     artist: String,
+    album: String,
+    albumImage: String,
     duration_ms: Number,
     moodScore: Number,
-    reason: String
+    reason: String,
+    externalUrl: String,
+    spotifyUri: String
   }],
-  actualDuration: Number,
-  savedToSpotify: {
-    type: Boolean,
-    default: false
-  },
-  spotifyPlaylistId: String
+  actualDuration: Number
 }, { timestamps: true });
 
 module.exports = mongoose.model('MoodSession', moodSessionSchema);

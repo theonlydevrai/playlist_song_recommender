@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const spotifyService = require('../services/spotifyService');
 const mlService = require('../services/mlService');
-const User = require('../models/User');
+const geminiService = require('../services/geminiService');
 const Playlist = require('../models/Playlist');
 
 // Helper to validate MongoDB ObjectId
@@ -12,7 +12,6 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 // Helper to sanitize playlist URL
 const sanitizePlaylistUrl = (url) => {
   if (typeof url !== 'string') return null;
-  // Only allow Spotify URLs
   const spotifyUrlPattern = /^https?:\/\/(open\.)?spotify\.com\/playlist\/[a-zA-Z0-9]+/;
   const spotifyUriPattern = /^spotify:playlist:[a-zA-Z0-9]+$/;
   if (spotifyUrlPattern.test(url) || spotifyUriPattern.test(url)) {
@@ -21,46 +20,14 @@ const sanitizePlaylistUrl = (url) => {
   return null;
 };
 
-// Middleware to check authentication
-const requireAuth = async (req, res, next) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-
-  // Validate session userId is valid ObjectId
-  if (!isValidObjectId(req.session.userId)) {
-    return res.status(401).json({ error: 'Invalid session' });
-  }
-
-  const user = await User.findById(req.session.userId);
-  if (!user) {
-    return res.status(401).json({ error: 'User not found' });
-  }
-
-  // Refresh token if needed
-  if (user.tokenExpiry < new Date()) {
-    try {
-      const tokens = await spotifyService.refreshAccessToken(user.refreshToken);
-      user.accessToken = tokens.access_token;
-      user.tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000);
-      await user.save();
-    } catch (err) {
-      return res.status(401).json({ error: 'Token refresh failed' });
-    }
-  }
-
-  req.user = user;
-  next();
-};
-
-// Analyze a playlist
-router.post('/analyze', requireAuth, async (req, res) => {
+// Analyze a public playlist
+router.post('/analyze', async (req, res) => {
   const { playlistUrl } = req.body;
 
   // Validate and sanitize input
   const sanitizedUrl = sanitizePlaylistUrl(playlistUrl);
   if (!sanitizedUrl) {
-    return res.status(400).json({ error: 'Invalid Spotify playlist URL' });
+    return res.status(400).json({ error: 'Invalid Spotify playlist URL. Please use a public playlist URL.' });
   }
 
   try {
@@ -70,35 +37,76 @@ router.post('/analyze', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Could not extract playlist ID from URL' });
     }
 
-    // Check if playlist already exists
-    let existingPlaylist = await Playlist.findOne({
-      userId: req.user._id,
-      spotifyPlaylistId: playlistId
-    });
+    // Check if playlist already analyzed (cache)
+    let existingPlaylist = await Playlist.findOne({ spotifyPlaylistId: playlistId });
 
     if (existingPlaylist && existingPlaylist.isProcessed) {
+      // Return cached result
       return res.json({
         playlistId: existingPlaylist._id,
         name: existingPlaylist.name,
+        description: existingPlaylist.description,
+        imageUrl: existingPlaylist.imageUrl,
+        owner: existingPlaylist.owner,
         trackCount: existingPlaylist.totalTracks,
-        status: 'already_processed',
-        moodCategories: existingPlaylist.moodCategories
+        status: 'cached',
+        moodCategories: Object.fromEntries(
+          Object.entries(existingPlaylist.moodCategories?.toObject() || {}).map(([k, v]) => [k, v.length])
+        )
       });
     }
 
     // Get playlist info from Spotify
-    const playlistInfo = await spotifyService.getPlaylist(req.user.accessToken, playlistId);
+    const playlistInfo = await spotifyService.getPlaylist(playlistId);
     
-    // Get all tracks
-    const tracks = await spotifyService.getPlaylistTracks(req.user.accessToken, playlistId);
-    
-    // Get audio features for all tracks
-    const trackIds = tracks.map(t => t.spotifyTrackId);
-    const audioFeatures = await spotifyService.getAudioFeatures(req.user.accessToken, trackIds);
+    // Check if playlist is public
+    if (playlistInfo.public === false) {
+      return res.status(400).json({ 
+        error: 'This playlist is private. Please use a public playlist URL.' 
+      });
+    }
 
-    // Merge audio features with tracks
-    for (let i = 0; i < tracks.length; i++) {
-      tracks[i].audioFeatures = audioFeatures[i] || null;
+    // Get all tracks
+    const tracks = await spotifyService.getPlaylistTracks(playlistId);
+    
+    if (tracks.length === 0) {
+      return res.status(400).json({ error: 'Playlist is empty or has no accessible tracks' });
+    }
+
+    // Debug: log sample track data
+    console.log(`Fetched ${tracks.length} tracks from Spotify`);
+    console.log(`Sample track:`, {
+      name: tracks[0]?.name,
+      artist: tracks[0]?.artist,
+      duration_ms: tracks[0]?.duration_ms,
+      album: tracks[0]?.album
+    });
+
+    // Use Gemini to analyze track moods from song names and artists
+    // This replaces the deprecated Spotify Audio Features API
+    console.log(`Analyzing ${tracks.length} tracks with AI...`);
+    const trackMoodMap = await geminiService.analyzeTracksMood(tracks);
+
+    // Apply mood analysis to tracks
+    for (const track of tracks) {
+      const aiMood = trackMoodMap?.[track.name.toLowerCase()];
+      
+      if (aiMood) {
+        // Use AI-analyzed mood data
+        track.audioFeatures = {
+          energy: aiMood.energy,
+          valence: aiMood.valence,
+          danceability: aiMood.danceability,
+          acousticness: 0.3,
+          instrumentalness: 0.1,
+          tempo: 120,
+          _source: 'gemini'
+        };
+        track.moodCategory = aiMood.category;
+      } else {
+        // Fallback to estimated features
+        track.audioFeatures = spotifyService.estimateAudioFeatures(track);
+      }
     }
 
     // Cluster tracks using ML service
@@ -106,14 +114,18 @@ router.post('/analyze', requireAuth, async (req, res) => {
 
     // Save or update playlist
     if (existingPlaylist) {
+      existingPlaylist.name = playlistInfo.name;
+      existingPlaylist.description = playlistInfo.description;
+      existingPlaylist.imageUrl = playlistInfo.images?.[0]?.url;
+      existingPlaylist.owner = playlistInfo.owner.display_name;
       existingPlaylist.tracks = tracks;
       existingPlaylist.moodCategories = clusterResult.categories;
+      existingPlaylist.totalTracks = tracks.length;
       existingPlaylist.isProcessed = true;
       existingPlaylist.processedAt = new Date();
       await existingPlaylist.save();
     } else {
       existingPlaylist = await Playlist.create({
-        userId: req.user._id,
         spotifyPlaylistId: playlistId,
         name: playlistInfo.name,
         description: playlistInfo.description,
@@ -132,6 +144,7 @@ router.post('/analyze', requireAuth, async (req, res) => {
       name: existingPlaylist.name,
       description: existingPlaylist.description,
       imageUrl: existingPlaylist.imageUrl,
+      owner: existingPlaylist.owner,
       trackCount: tracks.length,
       status: 'processed',
       moodCategories: Object.fromEntries(
@@ -140,16 +153,26 @@ router.post('/analyze', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Playlist analysis error:', err);
-    res.status(500).json({ error: 'Failed to analyze playlist', details: err.message });
+    
+    // Handle Spotify API errors
+    if (err.response?.status === 404) {
+      return res.status(404).json({ error: 'Playlist not found. Make sure the URL is correct and the playlist is public.' });
+    }
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      return res.status(400).json({ error: 'Cannot access this playlist. Make sure it is public.' });
+    }
+    
+    res.status(500).json({ error: 'Failed to analyze playlist. Please try again.' });
   }
 });
 
-// Get user's playlists
-router.get('/', requireAuth, async (req, res) => {
+// Get recently analyzed playlists
+router.get('/recent', async (req, res) => {
   try {
-    const playlists = await Playlist.find({ userId: req.user._id })
-      .select('name spotifyPlaylistId totalTracks imageUrl isProcessed processedAt')
-      .sort({ processedAt: -1 });
+    const playlists = await Playlist.find({ isProcessed: true })
+      .select('name spotifyPlaylistId totalTracks imageUrl owner processedAt')
+      .sort({ processedAt: -1 })
+      .limit(10);
 
     res.json(playlists);
   } catch (err) {
@@ -158,17 +181,13 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // Get specific playlist with mood breakdown
-router.get('/:id', requireAuth, async (req, res) => {
-  // Validate ObjectId
+router.get('/:id', async (req, res) => {
   if (!isValidObjectId(req.params.id)) {
     return res.status(400).json({ error: 'Invalid playlist ID' });
   }
 
   try {
-    const playlist = await Playlist.findOne({
-      _id: req.params.id,
-      userId: req.user._id
-    });
+    const playlist = await Playlist.findById(req.params.id);
 
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found' });
@@ -182,47 +201,27 @@ router.get('/:id', requireAuth, async (req, res) => {
     ];
 
     for (const category of categoryOrder) {
-      const tracks = playlist.moodCategories?.get(category) || [];
+      const trackIds = playlist.moodCategories?.get(category) || [];
       moodBreakdown[category] = {
-        count: tracks.length,
-        tracks: playlist.tracks.filter(t => tracks.includes(t.spotifyTrackId)).slice(0, 5)
+        count: trackIds.length,
+        tracks: playlist.tracks.filter(t => trackIds.includes(t.spotifyTrackId)).slice(0, 5)
       };
     }
 
     res.json({
       id: playlist._id,
+      _id: playlist._id,  // Include both for compatibility
+      spotifyPlaylistId: playlist.spotifyPlaylistId,
       name: playlist.name,
       description: playlist.description,
       imageUrl: playlist.imageUrl,
+      owner: playlist.owner,
       totalTracks: playlist.totalTracks,
       moodBreakdown,
       processedAt: playlist.processedAt
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to get playlist' });
-  }
-});
-
-// Delete a playlist from the app
-router.delete('/:id', requireAuth, async (req, res) => {
-  // Validate ObjectId
-  if (!isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid playlist ID' });
-  }
-
-  try {
-    const result = await Playlist.deleteOne({
-      _id: req.params.id,
-      userId: req.user._id
-    });
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Playlist not found' });
-    }
-    
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to delete playlist' });
   }
 });
 

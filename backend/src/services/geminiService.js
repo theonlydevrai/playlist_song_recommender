@@ -84,6 +84,69 @@ Analyze this mood and provide musical recommendations in this exact JSON format:
     }
   }
 
+  // Analyze tracks to estimate mood from song titles and artists
+  async analyzeTracksMood(tracks) {
+    // Take a sample of tracks for analysis (max 30 to avoid token limits)
+    const sampleSize = Math.min(tracks.length, 30);
+    const sample = tracks.slice(0, sampleSize);
+    
+    const trackList = sample.map(t => `"${t.name}" by ${t.artist}`).join('\n');
+    
+    const prompt = `You are a music expert. Analyze these songs and estimate their mood characteristics.
+
+Songs:
+${trackList}
+
+For EACH song, estimate:
+- energy (0-1): how energetic/intense (0=calm, 1=very energetic)
+- valence (0-1): emotional positivity (0=sad/dark, 1=happy/upbeat)
+- danceability (0-1): how danceable (0=not danceable, 1=very danceable)
+- category: one of [happy_energetic, calm_peaceful, melancholic, party_dance, romantic, motivational, chill_ambient, intense_aggressive]
+
+Respond ONLY with a JSON array, no explanation:
+[{"name": "song name", "energy": 0.7, "valence": 0.8, "danceability": 0.6, "category": "happy_energetic"}, ...]`;
+
+    try {
+      const response = await axios.post(
+        `${GEMINI_API_URL}?key=${this.apiKey}`,
+        {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 4096
+          }
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+
+      let textResponse = response.data.candidates[0].content.parts[0].text.trim();
+      
+      // Clean markdown
+      if (textResponse.startsWith('```json')) textResponse = textResponse.slice(7);
+      if (textResponse.startsWith('```')) textResponse = textResponse.slice(3);
+      if (textResponse.endsWith('```')) textResponse = textResponse.slice(0, -3);
+      textResponse = textResponse.trim();
+
+      const analysis = JSON.parse(textResponse);
+      
+      // Map analysis back to tracks
+      const trackMoodMap = {};
+      for (const item of analysis) {
+        trackMoodMap[item.name.toLowerCase()] = {
+          energy: item.energy || 0.5,
+          valence: item.valence || 0.5,
+          danceability: item.danceability || 0.5,
+          category: item.category || 'calm_peaceful'
+        };
+      }
+      
+      return trackMoodMap;
+    } catch (error) {
+      console.error('Gemini track analysis error:', error.message);
+      return null;
+    }
+  }
+
   getDefaultMoodAnalysis(moodDescription) {
     // Simple keyword-based fallback
     const lowerMood = moodDescription.toLowerCase();
