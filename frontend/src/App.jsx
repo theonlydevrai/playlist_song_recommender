@@ -207,11 +207,86 @@ export default function App() {
         >
           {showResults && (
             <div className="h-full flex flex-col p-4">
-              {/* Loading State */}
+              {/* Loading State with Audio Visualizer */}
               {loading && (
-                <div className="h-full flex flex-col items-center justify-center">
-                  <Loader2 className="w-12 h-12 text-[#3b82f6] animate-spin mb-4" />
-                  <p className="text-[#707070] text-lg">{loadingStatus}</p>
+                <div className="h-full flex flex-col items-center justify-center relative overflow-hidden rounded-xl bg-[#0f0f0f]/50">
+                  {/* Audio Visualizer Background - Full width */}
+                  <div className="absolute inset-0 flex items-end justify-center px-4 pb-8 blur-sm opacity-60">
+                    <div className="flex items-end gap-[3px] h-full w-full justify-center">
+                      {[...Array(40)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 max-w-4 bg-gradient-to-t from-[#3b82f6] to-[#FB7185] rounded-t-sm"
+                          style={{
+                            animation: `audioBar${i % 5} ${1.2 + Math.random() * 1.3}s ease-in-out infinite alternate`,
+                            animationDelay: `${Math.random() * 2}s`,
+                            height: `${20 + Math.random() * 30}%`
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Secondary layer for depth - slightly offset */}
+                  <div className="absolute inset-0 flex items-end justify-center px-8 pb-12 blur-md opacity-30">
+                    <div className="flex items-end gap-1 h-full w-full justify-center">
+                      {[...Array(25)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 max-w-6 bg-gradient-to-t from-[#FB7185] to-[#8B5CF6] rounded-t-sm"
+                          style={{
+                            animation: `audioBar${i % 5} ${1.4 + Math.random() * 1.2}s ease-in-out infinite alternate`,
+                            animationDelay: `${Math.random() * 2.5}s`,
+                            height: `${15 + Math.random() * 25}%`
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Foreground Content */}
+                  <div className="relative z-10 flex flex-col items-center bg-[#0a0a0a]/70 px-8 py-6 rounded-2xl backdrop-blur-sm">
+                    {/* Mini visualizer */}
+                    <div className="flex items-end gap-1 h-10 mb-4">
+                      {[...Array(5)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-1.5 bg-[#3b82f6] rounded-full"
+                          style={{
+                            animation: `audioBar${i} ${0.8 + Math.random() * 0.6}s ease-in-out infinite alternate`,
+                            animationDelay: `${Math.random() * 0.5}s`,
+                            height: '50%'
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[#f5f5f5] text-lg font-medium">{loadingStatus}</p>
+                    <p className="text-[#707070] text-sm mt-1">Analyzing your vibe...</p>
+                  </div>
+
+                  {/* CSS Animations with varied heights */}
+                  <style>{`
+                    @keyframes audioBar0 {
+                      0% { height: 15%; }
+                      100% { height: 85%; }
+                    }
+                    @keyframes audioBar1 {
+                      0% { height: 25%; }
+                      100% { height: 95%; }
+                    }
+                    @keyframes audioBar2 {
+                      0% { height: 10%; }
+                      100% { height: 70%; }
+                    }
+                    @keyframes audioBar3 {
+                      0% { height: 20%; }
+                      100% { height: 90%; }
+                    }
+                    @keyframes audioBar4 {
+                      0% { height: 30%; }
+                      100% { height: 75%; }
+                    }
+                  `}</style>
                 </div>
               )}
 
