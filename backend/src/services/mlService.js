@@ -97,8 +97,9 @@ class MLService {
     let geminiScores = null;
     if (userMoodDescription && tracks.length > 0) {
       try {
+        // Pass all tracks - geminiService will randomly sample from entire playlist
         geminiScores = await geminiService.analyzeAndRankTracks(
-          tracks.slice(0, 50), 
+          tracks, 
           moodAnalysis, 
           userMoodDescription
         );
@@ -112,10 +113,10 @@ class MLService {
       let score = 0;
       const f = track.audioFeatures || {};
 
-      // Use Gemini score if available (index + 1 because Gemini uses 1-based index)
-      if (geminiScores && geminiScores[index + 1]) {
-        score = geminiScores[index + 1].score;
-        track.geminiReason = geminiScores[index + 1].reason;
+      // Use Gemini score if available (keyed by track ID)
+      if (geminiScores && geminiScores[track.spotifyTrackId]) {
+        score = geminiScores[track.spotifyTrackId].score;
+        track.geminiReason = geminiScores[track.spotifyTrackId].reason;
       } else {
         // Rule-based scoring
 

@@ -65,9 +65,9 @@ router.post('/analyze', async (req, res) => {
     console.log(`Analyzing ${tracks.length} tracks with AI...`);
     const trackMoodMap = await geminiService.analyzeTracksMood(tracks);
 
-    // Apply mood analysis to tracks
+    // Apply mood analysis to tracks (using track ID for reliable matching)
     for (const track of tracks) {
-      const aiMood = trackMoodMap?.[track.name.toLowerCase()];
+      const aiMood = trackMoodMap?.[track.spotifyTrackId];
       
       if (aiMood) {
         // Use AI-analyzed mood data

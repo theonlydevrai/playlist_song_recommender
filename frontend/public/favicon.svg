@@ -1,6 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <circle cx="50" cy="50" r="45" fill="#1DB954"/>
-  <path d="M30 45 Q50 35 70 45" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
-  <path d="M35 55 Q50 47 65 55" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M40 65 Q50 59 60 65" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6"/>
+      <stop offset="100%" style="stop-color:#EC4899"/>
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="45" fill="url(#grad)"/>
+  <!-- Headband -->
+  <path d="M20 55 Q20 25 50 25 Q80 25 80 55" stroke="white" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Left ear cup -->
+  <rect x="14" y="50" width="14" height="22" rx="5" fill="white"/>
+  <!-- Right ear cup -->
+  <rect x="72" y="50" width="14" height="22" rx="5" fill="white"/>
 </svg>

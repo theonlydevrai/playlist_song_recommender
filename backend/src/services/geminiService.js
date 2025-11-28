@@ -101,7 +101,8 @@ Provide your analysis in this exact JSON format:
 
   async analyzeAndRankTracks(tracks, moodAnalysis, userMoodDescription) {
     const sampleSize = Math.min(tracks.length, 50);
-    const sample = tracks.slice(0, sampleSize);
+    // Take a random sample from the entire playlist, not just the first N tracks
+    const sample = this.getRandomSample(tracks, sampleSize);
 
     const trackList = sample
       .map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`)
@@ -155,13 +156,17 @@ Respond ONLY with a JSON array of objects with track index and score:
 
       const rankings = JSON.parse(textResponse);
       
-      // Create a map of index to score
+      // Create a map of track ID to score (using trackId for reliable mapping)
       const scoreMap = {};
       for (const item of rankings) {
-        scoreMap[item.index] = {
-          score: item.score || 50,
-          reason: item.reason || "Matches mood"
-        };
+        const sampleIndex = item.index - 1; // Convert 1-based to 0-based
+        if (sampleIndex >= 0 && sampleIndex < sample.length) {
+          const trackId = sample[sampleIndex].spotifyTrackId;
+          scoreMap[trackId] = {
+            score: item.score || 50,
+            reason: item.reason || "Matches mood"
+          };
+        }
       }
 
       return scoreMap;
@@ -172,14 +177,34 @@ Respond ONLY with a JSON array of objects with track index and score:
   }
 
   async analyzeTracksMood(tracks) {
-    const sampleSize = Math.min(tracks.length, 30);
-    const sample = tracks.slice(0, sampleSize);
+    // Process tracks in batches to cover more of the playlist
+    const batchSize = 30;
+    const maxBatches = 4; // Up to 120 tracks analyzed
+    const totalToAnalyze = Math.min(tracks.length, batchSize * maxBatches);
+    
+    // Get a random sample of tracks to analyze
+    const samplesToAnalyze = this.getRandomSample(tracks, totalToAnalyze);
+    
+    // Split into batches
+    const batches = [];
+    for (let i = 0; i < samplesToAnalyze.length; i += batchSize) {
+      batches.push(samplesToAnalyze.slice(i, i + batchSize));
+    }
+    
+    console.log(`Analyzing ${samplesToAnalyze.length} tracks in ${batches.length} batch(es)`);
+    
+    const trackMoodMap = {};
+    
+    // Process batches (can be parallelized but doing sequentially to avoid rate limits)
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      
+      // Use index-based identification for reliable mapping
+      const trackList = batch
+        .map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`)
+        .join("\n");
 
-    const trackList = sample
-      .map((t) => `"${t.name}" by ${t.artist}`)
-      .join("\n");
-
-    const prompt = `You are a music expert with encyclopedic knowledge of songs and artists. Analyze these songs and estimate their emotional characteristics based on your knowledge of the music.
+      const prompt = `You are a music expert with encyclopedic knowledge of songs and artists. Analyze these songs and estimate their emotional characteristics based on your knowledge of the music.
 
 Songs to analyze:
 ${trackList}
@@ -198,44 +223,50 @@ Base your analysis on:
 3. Known characteristics of the song if you recognize it
 4. Genre conventions
 
-Respond ONLY with a JSON array:
-[{"name": "exact song name", "energy": 0.7, "valence": 0.8, "danceability": 0.6, "category": "happy_energetic"}, ...]`;
+Respond ONLY with a JSON array using the track index number:
+[{"index": 1, "energy": 0.7, "valence": 0.8, "danceability": 0.6, "category": "happy_energetic"}, ...]`;
 
-    try {
-      const response = await axios.post(
-        `${GEMINI_API_URL}?key=${this.apiKey}`,
-        {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            topP: 0.9,
-            maxOutputTokens: 4096,
+      try {
+        const response = await axios.post(
+          `${GEMINI_API_URL}?key=${this.apiKey}`,
+          {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.3,
+              topP: 0.9,
+              maxOutputTokens: 4096,
+            },
           },
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
+          { headers: { "Content-Type": "application/json" } }
+        );
 
-      let textResponse = this.cleanJsonResponse(
-        response.data.candidates[0].content.parts[0].text
-      );
+        let textResponse = this.cleanJsonResponse(
+          response.data.candidates[0].content.parts[0].text
+        );
 
-      const analysis = JSON.parse(textResponse);
+        const analysis = JSON.parse(textResponse);
 
-      const trackMoodMap = {};
-      for (const item of analysis) {
-        trackMoodMap[item.name.toLowerCase()] = {
-          energy: item.energy || 0.5,
-          valence: item.valence || 0.5,
-          danceability: item.danceability || 0.5,
-          category: item.category || "calm_peaceful",
-        };
+        // Map results back to track IDs using index
+        for (const item of analysis) {
+          const batchIndex = item.index - 1; // Convert 1-based to 0-based
+          if (batchIndex >= 0 && batchIndex < batch.length) {
+            const trackId = batch[batchIndex].spotifyTrackId;
+            trackMoodMap[trackId] = {
+              energy: item.energy || 0.5,
+              valence: item.valence || 0.5,
+              danceability: item.danceability || 0.5,
+              category: item.category || "calm_peaceful",
+            };
+          }
+        }
+      } catch (error) {
+        console.error(`Gemini track analysis error (batch ${batchIndex + 1}):`, error.message);
+        // Continue with other batches even if one fails
       }
-
-      return trackMoodMap;
-    } catch (error) {
-      console.error("Gemini track analysis error:", error.message);
-      return null;
     }
+    
+    console.log(`Successfully analyzed ${Object.keys(trackMoodMap).length} tracks`);
+    return trackMoodMap;
   }
 
   cleanJsonResponse(text) {
@@ -323,6 +354,18 @@ Respond ONLY with a JSON array:
       intense_aggressive: ["motivational", "party_dance"],
     };
     return similarityMap[category] || ["calm_peaceful"];
+  }
+
+  // Helper to get a random sample from an array (Fisher-Yates shuffle)
+  getRandomSample(array, sampleSize) {
+    if (array.length <= sampleSize) return [...array];
+    
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, sampleSize);
   }
 
   async generatePlaylistDescription(moodInput, trackCount, totalDuration) {
