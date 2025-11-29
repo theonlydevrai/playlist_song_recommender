@@ -104,12 +104,6 @@ The ML service `.env` uses defaults (port 5000) - no changes needed.
 
 ### Step 6: Run the Application
 
-**Option A: Windows Quick Start**
-
-Double-click `start-app.bat`
-
-**Option B: Manual Start (3 terminals)**
-
 Terminal 1 - Backend:
 
 ```bash
@@ -150,7 +144,6 @@ Go to http://localhost:3000
 ├── backend/          # Express API server (port 3001)
 ├── frontend/         # React app (port 3000)
 ├── ml-service/       # Python ML service (port 5000)
-└── start-app.bat     # Windows launcher
 ```
 
 ## Privacy
