@@ -2,7 +2,8 @@ import { useState } from 'react'
 import axios from 'axios'
 import { 
   Music2, Loader2, AlertCircle, Clock, Send, 
-  Zap, Copy, Check, ExternalLink, RotateCcw, ListMusic
+  Zap, Copy, Check, ExternalLink, RotateCcw, ListMusic,
+  Plus, X, ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react'
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90]
@@ -10,6 +11,8 @@ const DURATION_OPTIONS = [15, 30, 45, 60, 90]
 export default function App() {
   const [playlistUrl, setPlaylistUrl] = useState('')
   const [moodInput, setMoodInput] = useState('')
+  const [moodSequence, setMoodSequence] = useState([]) // New: for mood transitions
+  const [useMoodTransition, setUseMoodTransition] = useState(false) // Toggle mode
   const [duration, setDuration] = useState(30)
   const [session, setSession] = useState(null)
   
@@ -27,6 +30,7 @@ export default function App() {
 
   const handleAnalyze = async (e) => {
     e.preventDefault()
+    console.log('🔍 handleAnalyze called')
     if (!playlistUrl.trim()) return setError('Please enter a playlist URL')
     
     setLoading(true)
@@ -34,16 +38,21 @@ export default function App() {
     setLoadingStatus('Analyzing playlist...')
 
     try {
+      console.log('📡 Calling /api/playlists/analyze')
       const analyzeResponse = await axios.post('/api/playlists/analyze', {
         playlistUrl: playlistUrl.trim()
       })
       
+      console.log('✅ Playlist analyzed:', analyzeResponse.data.playlistId)
       setPlaylistId(analyzeResponse.data.playlistId)
       const detailsResponse = await axios.get(`/api/playlists/${analyzeResponse.data.playlistId}`)
       
+      console.log('✅ Got', detailsResponse.data.allTracks?.length, 'tracks')
       setPlaylistTracks(detailsResponse.data.allTracks || [])
       setPlaylistLoaded(true)
+      setShowResults(false) // Make sure we're in selection view
     } catch (err) {
+      console.error('❌ Analyze error:', err)
       setError(err.response?.data?.error || 'Failed to analyze playlist')
     } finally {
       setLoading(false)
@@ -52,7 +61,13 @@ export default function App() {
   }
 
   const handleGenerateMix = async () => {
-    if (!moodInput.trim()) return setError('Please describe your mood')
+    console.log('🎵 handleGenerateMix called')
+    if (useMoodTransition && moodSequence.length === 0) {
+      return setError('Please add at least one mood')
+    }
+    if (!useMoodTransition && !moodInput.trim()) {
+      return setError('Please describe your mood')
+    }
     if (!playlistId) return setError('Please load a playlist first')
 
     setLoading(true)
@@ -60,16 +75,26 @@ export default function App() {
     setLoadingStatus('Creating your mix...')
 
     try {
-      const response = await axios.post('/api/recommendations', {
+      const requestBody = {
         playlistId: playlistId,
-        moodDescription: moodInput,
         durationMinutes: duration,
         selectedTrackIds: Array.from(selectedTrackIds)
-      })
+      }
+
+      if (useMoodTransition) {
+        requestBody.moods = moodSequence
+      } else {
+        requestBody.moodDescription = moodInput
+      }
+
+      console.log('📡 Calling /api/recommendations with:', requestBody)
+      const response = await axios.post('/api/recommendations', requestBody)
       
+      console.log('✅ Got recommendations:', response.data.recommendations?.length, 'tracks')
       setSession(response.data)
       setShowResults(true)
     } catch (err) {
+      console.error('❌ Generate mix error:', err)
       setError(err.response?.data?.error || 'Failed to generate mix')
     } finally {
       setLoading(false)
@@ -92,11 +117,36 @@ export default function App() {
     setShowResults(false)
     setSession(null)
     setMoodInput('')
+    setMoodSequence([])
+    setUseMoodTransition(false)
     setError('')
     setPlaylistUrl('')
     setPlaylistTracks([])
     setSelectedTrackIds(new Set())
     setPlaylistId(null)
+  }
+
+  const addMood = () => {
+    if (moodInput.trim()) {
+      setMoodSequence([...moodSequence, moodInput.trim()])
+      setMoodInput('')
+    }
+  }
+
+  const removeMood = (index) => {
+    setMoodSequence(moodSequence.filter((_, i) => i !== index))
+  }
+
+  const moveMood = (index, direction) => {
+    if (direction === 'up' && index > 0) {
+      const newSequence = [...moodSequence]
+      ;[newSequence[index - 1], newSequence[index]] = [newSequence[index], newSequence[index - 1]]
+      setMoodSequence(newSequence)
+    } else if (direction === 'down' && index < moodSequence.length - 1) {
+      const newSequence = [...moodSequence]
+      ;[newSequence[index], newSequence[index + 1]] = [newSequence[index + 1], newSequence[index]]
+      setMoodSequence(newSequence)
+    }
   }
 
   const copyToClipboard = (type) => {
@@ -191,27 +241,120 @@ export default function App() {
 
               {/* Mood Input */}
               <div className="space-y-2">
-                <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-[#FB7185]" /> Your vibe
-                </label>
-                <textarea
-                  value={moodInput}
-                  onChange={(e) => setMoodInput(e.target.value)}
-                  placeholder="e.g., feeling chill and want something relaxing..."
-                  className="w-full rounded-xl px-4 py-3 text-sm bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#FB7185]/50 focus:outline-none resize-none h-20 transition-colors"
-                />
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {['energetic', 'chill', 'focus', 'melancholic'].map((mood) => (
-                    <button
-                      key={mood}
-                      type="button"
-                      onClick={() => setMoodInput(mood)}
-                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#FB7185]/10 border-[#FB7185]/30 text-[#FB7185]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
-                    >
-                      {mood}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <label className="text-[#9a9a9a] text-sm font-medium flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-[#FB7185]" /> Your vibe
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setUseMoodTransition(!useMoodTransition)}
+                    className="text-xs px-2 py-1 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50 transition-colors"
+                  >
+                    {useMoodTransition ? '← Single mood' : 'Mood Journey →'}
+                  </button>
                 </div>
+
+                {!useMoodTransition ? (
+                  <>
+                    <textarea
+                      value={moodInput}
+                      onChange={(e) => setMoodInput(e.target.value)}
+                      placeholder="e.g., feeling chill and want something relaxing..."
+                      className="w-full rounded-xl px-4 py-3 text-sm bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#FB7185]/50 focus:outline-none resize-none h-20 transition-colors"
+                    />
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {['energetic', 'chill', 'focus', 'melancholic'].map((mood) => (
+                        <button
+                          key={mood}
+                          type="button"
+                          onClick={() => setMoodInput(mood)}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${moodInput === mood ? 'bg-[#FB7185]/10 border-[#FB7185]/30 text-[#FB7185]' : 'bg-[#0f0f0f] border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50'}`}
+                        >
+                          {mood}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Mood Sequence Display */}
+                    {moodSequence.length > 0 && (
+                      <div className="rounded-xl bg-[#0f0f0f] border border-[#404040]/30 p-3 space-y-2">
+                        {moodSequence.map((mood, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#3b82f6]/10 text-[#3b82f6] text-xs flex items-center justify-center font-medium">
+                              {index + 1}
+                            </span>
+                            <div className="flex-1 text-sm text-[#f5f5f5] truncate">
+                              {mood}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => moveMood(index, 'up')}
+                                disabled={index === 0}
+                                className="p-1 hover:bg-[#141414] rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5 text-[#707070]" />
+                              </button>
+                              <button
+                                onClick={() => moveMood(index, 'down')}
+                                disabled={index === moodSequence.length - 1}
+                                className="p-1 hover:bg-[#141414] rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5 text-[#707070]" />
+                              </button>
+                              <button
+                                onClick={() => removeMood(index)}
+                                className="p-1 hover:bg-[#FB7185]/10 rounded transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5 text-[#FB7185]" />
+                              </button>
+                            </div>
+                            {index < moodSequence.length - 1 && (
+                              <ArrowRight className="w-3.5 h-3.5 text-[#5a5a5a] flex-shrink-0" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add Mood Input */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={moodInput}
+                        onChange={(e) => setMoodInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addMood()}
+                        placeholder="Type a mood (e.g., melancholic, romantic, vibrant)"
+                        className="flex-1 rounded-lg px-3 py-2 text-sm bg-[#0f0f0f] border border-[#404040]/30 text-[#f5f5f5] placeholder-[#5a5a5a] focus:border-[#FB7185]/50 focus:outline-none transition-colors"
+                      />
+                      <button
+                        onClick={addMood}
+                        disabled={!moodInput.trim()}
+                        className="px-3 py-2 rounded-lg bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 disabled:bg-[#0f0f0f] disabled:text-[#5a5a5a] text-[#3b82f6] border border-[#3b82f6]/30 hover:border-[#3b82f6]/50 disabled:border-[#404040]/20 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Quick Mood Suggestions */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {['melancholic', 'romantic', 'vibrant', 'party', 'chill', 'energetic'].map((mood) => (
+                        <button
+                          key={mood}
+                          type="button"
+                          onClick={() => {
+                            setMoodInput(mood)
+                            addMood()
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#9a9a9a] hover:border-[#707070]/50 transition-colors"
+                        >
+                          + {mood}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Duration Selector */}
@@ -243,7 +386,7 @@ export default function App() {
               {/* Create Playlist Button */}
               <button
                 onClick={handleGenerateMix}
-                disabled={!moodInput.trim() || !playlistLoaded || loading}
+                disabled={(useMoodTransition ? moodSequence.length === 0 : !moodInput.trim()) || !playlistLoaded || loading}
                 className="w-full bg-[#3b82f6]/10 hover:bg-[#3b82f6]/20 disabled:bg-[#0f0f0f] disabled:text-[#5a5a5a] text-[#3b82f6] disabled:border-[#404040]/20 font-medium py-4 rounded-xl flex items-center justify-center gap-3 text-base border border-[#3b82f6]/30 hover:border-[#3b82f6]/50 transition-colors"
               >
                 {loading && showResults ? (
@@ -482,6 +625,25 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Mood Segments Indicator (for transition mode) */}
+                {session.transitionMode && session.moodSegments && (
+                  <div className="flex-shrink-0 mb-4 px-2">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                      {session.moodSegments.map((segment, i) => (
+                        <div key={i} className="flex items-center gap-2 flex-shrink-0">
+                          <div className="bg-[#0f0f0f] border border-[#404040]/30 rounded-lg px-3 py-2 text-xs">
+                            <div className="text-[#3b82f6] font-medium capitalize">{segment.mood}</div>
+                            <div className="text-[#5a5a5a] mt-0.5">{segment.trackCount} tracks</div>
+                          </div>
+                          {i < session.moodSegments.length - 1 && (
+                            <ArrowRight className="w-4 h-4 text-[#5a5a5a]" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Track List */}
                 <div className="flex-1 overflow-y-auto rounded-xl bg-[#0f0f0f]/95 border border-[#404040]/20">
                   {session.recommendations?.map((track, i) => (
@@ -497,6 +659,9 @@ export default function App() {
                       <div className="flex-1 min-w-0">
                         <p className="text-[#f5f5f5] text-sm truncate">{track.name}</p>
                         <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
+                        {track.segmentMood && (
+                          <p className="text-[#3b82f6]/70 text-[10px] mt-0.5 capitalize">{track.segmentMood} section</p>
+                        )}
                       </div>
                       <span className="text-xs text-[#3b82f6] bg-[#3b82f6]/10 px-2.5 py-1 rounded-lg border border-[#3b82f6]/20">{track.moodScore || 0}%</span>
                       {track.externalUrl && (

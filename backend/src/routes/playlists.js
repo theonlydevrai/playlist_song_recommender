@@ -52,47 +52,25 @@ router.post('/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Playlist is empty or has no accessible tracks' });
     }
 
-    // Debug: log sample track data
-    console.log(`Fetched ${tracks.length} tracks from Spotify`);
-    console.log(`Sample track:`, {
-      name: tracks[0]?.name,
-      artist: tracks[0]?.artist,
-      duration_ms: tracks[0]?.duration_ms,
-      album: tracks[0]?.album
-    });
-
-    // Use Gemini to analyze track moods from song names and artists
-    console.log(`Analyzing ${tracks.length} tracks with AI...`);
-    const trackMoodMap = await geminiService.analyzeTracksMood(tracks);
-
-    // Apply mood analysis to tracks (using track ID for reliable matching)
+    console.log(`✅ Fetched ${tracks.length} tracks from Spotify`);
+    
+    // SKIP AI ANALYSIS during load - just show Spotify data for speed
+    // AI analysis will happen later during recommendation generation
+    
+    // Enrich tracks with real Spotify audio features and genres (fast!)
+    console.log(`🎵 Enriching tracks with Spotify audio features...`);
+    await spotifyService.enrichTracksWithFeaturesAndGenres(tracks);
+    
+    // For tracks without audio features, add basic estimated ones
     for (const track of tracks) {
-      const aiMood = trackMoodMap?.[track.spotifyTrackId];
-      
-      if (aiMood) {
-        // Set mood category from AI (it considers lyrics/genre/context)
-        track.moodCategory = aiMood.category;
-        
-        // Only overwrite audio features if we don't have real Spotify data
-        if (!track.audioFeatures || track.audioFeatures._source !== 'spotify_api') {
-          track.audioFeatures = {
-            energy: aiMood.energy,
-            valence: aiMood.valence,
-            danceability: aiMood.danceability,
-            acousticness: 0.3,
-            instrumentalness: 0.1,
-            tempo: 120,
-            _source: 'gemini'
-          };
-        }
-      } else if (!track.audioFeatures) {
-        // Fallback to estimated features if no AI and no Spotify data
+      if (!track.audioFeatures) {
         track.audioFeatures = spotifyService.estimateAudioFeatures(track);
       }
+      // Don't set moodCategory yet - will be analyzed during recommendation
+      track.moodCategory = null;
     }
 
-    // Cluster tracks using ML service (will use existing categories if set)
-    const clusterResult = mlService.ruleBasedClustering(tracks);
+    console.log(`✅ Playlist ready for selection`);
 
     // Build playlist data object
     const playlistData = {
@@ -104,7 +82,6 @@ router.post('/analyze', async (req, res) => {
       owner: playlistInfo.owner.display_name,
       totalTracks: tracks.length,
       tracks,
-      moodCategories: clusterResult.categories,
       processedAt: new Date()
     };
 
@@ -118,10 +95,7 @@ router.post('/analyze', async (req, res) => {
       imageUrl: playlistData.imageUrl,
       owner: playlistData.owner,
       trackCount: tracks.length,
-      status: 'processed',
-      moodCategories: Object.fromEntries(
-        Object.entries(clusterResult.categories).map(([k, v]) => [k, v.length])
-      )
+      status: 'processed'
     });
   } catch (err) {
     console.error('Playlist analysis error:', err);
@@ -149,21 +123,6 @@ router.get('/:id', async (req, res) => {
     return res.status(404).json({ error: 'Playlist not found. Please analyze a playlist first.' });
   }
 
-  // Get mood category counts
-  const moodBreakdown = {};
-  const categoryOrder = [
-    'happy_energetic', 'calm_peaceful', 'melancholic', 'party_dance',
-    'romantic', 'motivational', 'chill_ambient', 'intense_aggressive'
-  ];
-
-  for (const category of categoryOrder) {
-    const trackIds = playlist.moodCategories?.[category] || [];
-    moodBreakdown[category] = {
-      count: trackIds.length,
-      tracks: playlist.tracks.filter(t => trackIds.includes(t.spotifyTrackId)).slice(0, 5)
-    };
-  }
-
   res.json({
     id: playlist.id,
     _id: playlist.id,  // Include both for compatibility
@@ -173,8 +132,7 @@ router.get('/:id', async (req, res) => {
     imageUrl: playlist.imageUrl,
     owner: playlist.owner,
     totalTracks: playlist.totalTracks,
-    allTracks: playlist.tracks, // Return all tracks for the selection UI
-    moodBreakdown,
+    allTracks: playlist.tracks, // Return all tracks with Spotify audio features for selection UI
     processedAt: playlist.processedAt
   });
 });

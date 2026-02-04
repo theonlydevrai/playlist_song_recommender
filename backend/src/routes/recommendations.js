@@ -14,17 +14,33 @@ const sanitizeMoodInput = (input) => {
 
 // Get recommendations based on mood
 router.post('/', async (req, res) => {
-  const { playlistId, moodDescription, durationMinutes } = req.body;
+  const { playlistId, moodDescription, moods, durationMinutes } = req.body;
 
   // Validate playlistId
   if (!playlistId) {
     return res.status(400).json({ error: 'Invalid playlist ID' });
   }
 
-  // Sanitize mood description
-  const sanitizedMood = sanitizeMoodInput(moodDescription);
-  if (!sanitizedMood) {
-    return res.status(400).json({ error: 'Please describe your mood (1-500 characters)' });
+  // Support both single mood and mood transition
+  let moodSequence = [];
+  let isMoodTransition = false;
+
+  if (moods && Array.isArray(moods) && moods.length > 0) {
+    // Mood transition mode
+    isMoodTransition = true;
+    moodSequence = moods.map(m => sanitizeMoodInput(m)).filter(m => m);
+    if (moodSequence.length === 0) {
+      return res.status(400).json({ error: 'Please provide valid moods (1-500 characters each)' });
+    }
+  } else if (moodDescription) {
+    // Single mood mode (backward compatible)
+    const sanitizedMood = sanitizeMoodInput(moodDescription);
+    if (!sanitizedMood) {
+      return res.status(400).json({ error: 'Please describe your mood (1-500 characters)' });
+    }
+    moodSequence = [sanitizedMood];
+  } else {
+    return res.status(400).json({ error: 'Please provide either moodDescription or moods array' });
   }
 
   // Validate duration
@@ -41,9 +57,6 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ error: 'Playlist not found. Please analyze a playlist first.' });
     }
 
-    // Analyze mood using Gemini
-    const moodAnalysis = await geminiService.analyzeMood(sanitizedMood);
-
     // Convert duration to milliseconds
     const targetDuration = duration * 60 * 1000;
 
@@ -52,34 +65,65 @@ router.post('/', async (req, res) => {
     
     // Debug log
     console.log(`Processing ${tracksData.length} tracks for ${duration} min playlist`);
-    console.log(`Sample track:`, tracksData[0]?.name, tracksData[0]?.duration_ms);
+    console.log(`Mood sequence:`, moodSequence);
 
-    // Get recommendations
-    const recommendations = await mlService.ruleBasedRecommendations(
-      tracksData,
-      moodAnalysis,
-      targetDuration,
-      sanitizedMood,
-      req.body.selectedTrackIds || []
-    );
+    let recommendations;
 
-    res.json({
-      playlistName: playlist.name,
-      moodInput: sanitizedMood,
-      moodAnalysis: {
-        emotions: moodAnalysis.emotions,
-        energyLevel: moodAnalysis.energy_level,
-        valenceLevel: moodAnalysis.valence_level,
-        moodCategory: moodAnalysis.mood_category,
-        confidence: moodAnalysis.confidence
-      },
-      recommendations: recommendations.tracks,
-      totalDuration: recommendations.totalDuration,
-      totalDurationFormatted: formatDuration(recommendations.totalDuration),
-      trackCount: recommendations.trackCount,
-      requestedDuration: targetDuration,
-      requestedDurationFormatted: formatDuration(targetDuration)
-    });
+    if (isMoodTransition && moodSequence.length > 1) {
+      // MOOD TRANSITION MODE
+      const moodTransitionAnalysis = await geminiService.analyzeMoodTransitions(moodSequence, tracksData);
+      
+      recommendations = await mlService.moodTransitionRecommendations(
+        tracksData,
+        moodTransitionAnalysis,
+        targetDuration,
+        moodSequence,
+        req.body.selectedTrackIds || []
+      );
+
+      res.json({
+        playlistName: playlist.name,
+        moodSequence: moodSequence,
+        transitionMode: true,
+        moodSegments: recommendations.segments,
+        recommendations: recommendations.tracks,
+        totalDuration: recommendations.totalDuration,
+        totalDurationFormatted: formatDuration(recommendations.totalDuration),
+        trackCount: recommendations.trackCount,
+        requestedDuration: targetDuration,
+        requestedDurationFormatted: formatDuration(targetDuration)
+      });
+    } else {
+      // SINGLE MOOD MODE (existing logic)
+      const moodAnalysis = await geminiService.analyzeMood(moodSequence[0]);
+
+      recommendations = await mlService.ruleBasedRecommendations(
+        tracksData,
+        moodAnalysis,
+        targetDuration,
+        moodSequence[0],
+        req.body.selectedTrackIds || []
+      );
+
+      res.json({
+        playlistName: playlist.name,
+        moodInput: moodSequence[0],
+        transitionMode: false,
+        moodAnalysis: {
+          emotions: moodAnalysis.emotions,
+          energyLevel: moodAnalysis.energy_level,
+          valenceLevel: moodAnalysis.valence_level,
+          moodCategory: moodAnalysis.mood_category,
+          confidence: moodAnalysis.confidence
+        },
+        recommendations: recommendations.tracks,
+        totalDuration: recommendations.totalDuration,
+        totalDurationFormatted: formatDuration(recommendations.totalDuration),
+        trackCount: recommendations.trackCount,
+        requestedDuration: targetDuration,
+        requestedDurationFormatted: formatDuration(targetDuration)
+      });
+    }
   } catch (err) {
     console.error('Recommendation error:', err);
     res.status(500).json({ error: 'Failed to generate recommendations. Please try again.' });

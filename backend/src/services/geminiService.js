@@ -183,8 +183,8 @@ Respond ONLY with a JSON array of objects with track index and score:
 
   async analyzeTracksMood(tracks) {
     // Process tracks in batches to cover more of the playlist
-    const batchSize = 30;
-    const maxBatches = 4; // Up to 120 tracks analyzed
+    const batchSize = 20; // Reduced from 30
+    const maxBatches = 2; // Reduced from 4 - analyze max 40 tracks for speed
     const totalToAnalyze = Math.min(tracks.length, batchSize * maxBatches);
     
     // Get a random sample of tracks to analyze
@@ -200,7 +200,7 @@ Respond ONLY with a JSON array of objects with track index and score:
     
     const trackMoodMap = {};
     
-    // Process batches (can be parallelized but doing sequentially to avoid rate limits)
+    // Process batches with timeout
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
       
@@ -208,33 +208,28 @@ Respond ONLY with a JSON array of objects with track index and score:
       const trackList = batch
         .map((t, i) => {
           const info = [`${i + 1}. "${t.name}" by ${t.artist}`];
-          if (t.genres && t.genres.length > 0) info.push(`Genres: ${t.genres.join(', ')}`);
+          if (t.genres && t.genres.length > 0) info.push(`Genres: ${t.genres.slice(0, 2).join(', ')}`);
           if (t.audioFeatures) {
-             info.push(`Audio Data: Energy=${t.audioFeatures.energy.toFixed(2)}, Valence=${t.audioFeatures.valence.toFixed(2)}, Dance=${t.audioFeatures.danceability.toFixed(2)}`);
+             info.push(`Audio: E=${t.audioFeatures.energy.toFixed(1)}, V=${t.audioFeatures.valence.toFixed(1)}, D=${t.audioFeatures.danceability.toFixed(1)}`);
           }
-          if (t.popularity) info.push(`Popularity: ${t.popularity}/100`);
-          if (t.releaseDate) info.push(`Year: ${t.releaseDate.split('-')[0]}`);
           return info.join(' | ');
         })
         .join("\n");
 
-      const prompt = `You are a music expert with encyclopedic knowledge of songs and artists. Analyze these songs and estimate their emotional characteristics based on your knowledge of the music and the provided metadata.
+      const prompt = `You are a music expert. Analyze these songs and estimate their emotional characteristics.
 
-Songs to analyze:
+Songs:
 ${trackList}
 
-For EACH song, provide:
-- energy (0.0-1.0): Physical intensity (Use provided Audio Data if available, otherwise estimate)
-- valence (0.0-1.0): Emotional tone (Use provided Audio Data if available, otherwise estimate)
-- danceability (0.0-1.0): Rhythm suitability (Use provided Audio Data if available, otherwise estimate)
-- category: Best fitting mood category (Use genres and audio data to inform this)
+For EACH song provide: energy (0.0-1.0), valence (0.0-1.0), danceability (0.0-1.0), category
 
 Categories: happy_energetic, calm_peaceful, melancholic, party_dance, romantic, motivational, chill_ambient, intense_aggressive
 
-Respond ONLY with a JSON array using the track index number:
+Respond ONLY with JSON array:
 [{"index": 1, "energy": 0.7, "valence": 0.8, "danceability": 0.6, "category": "happy_energetic"}, ...]`;
 
       try {
+        console.log(`  Analyzing batch ${batchIndex + 1}/${batches.length}...`);
         const response = await axios.post(
           `${GEMINI_API_URL}?key=${this.apiKey}`,
           {
@@ -242,10 +237,13 @@ Respond ONLY with a JSON array using the track index number:
             generationConfig: {
               temperature: 0.3,
               topP: 0.9,
-              maxOutputTokens: 4096,
+              maxOutputTokens: 2048, // Reduced from 4096
             },
           },
-          { headers: { "Content-Type": "application/json" } }
+          { 
+            headers: { "Content-Type": "application/json" },
+            timeout: 15000 // 15 second timeout per batch
+          }
         );
 
         let textResponse = this.cleanJsonResponse(
@@ -267,8 +265,9 @@ Respond ONLY with a JSON array using the track index number:
             };
           }
         }
+        console.log(`  ✓ Batch ${batchIndex + 1} complete (${Object.keys(analysis).length} tracks)`);
       } catch (error) {
-        console.error(`Gemini track analysis error (batch ${batchIndex + 1}):`, error.message);
+        console.error(`  ✗ Gemini batch ${batchIndex + 1} failed:`, error.message);
         // Continue with other batches even if one fails
       }
     }
@@ -405,6 +404,110 @@ Respond ONLY with a JSON array using the track index number:
       return response.data.candidates[0].content.parts[0].text.trim();
     } catch (error) {
       return `Mood playlist: ${moodInput.slice(0, 50)}`;
+    }
+  }
+
+  async analyzeMoodTransitions(moodSequence, tracks) {
+    const systemPrompt = `You are an expert DJ and music psychologist specializing in creating emotionally intelligent playlist flows.
+
+TASK: Analyze a sequence of moods and determine which tracks can facilitate smooth transitions between them.
+
+MOOD TRANSITION PRINCIPLES:
+1. Bridge tracks can belong to multiple adjacent moods (e.g., a melancholic-romantic song)
+2. Smooth transitions require gradual changes in energy, valence, tempo
+3. Some mood combinations are more natural than others
+4. Consider lyrical themes, instrumentation, and emotional arc
+
+MOOD CATEGORIES:
+- happy_energetic: Upbeat, joyful, celebratory
+- calm_peaceful: Serene, tranquil, meditative
+- melancholic: Sad, reflective, nostalgic
+- party_dance: High-energy, danceable, social
+- romantic: Intimate, tender, passionate
+- motivational: Empowering, determined, focused
+- chill_ambient: Relaxed, atmospheric, background
+- intense_aggressive: Powerful, angry, cathartic
+- vibrant: Lively, colorful, dynamic
+- euphoric: Blissful, ecstatic, transcendent
+
+RESPONSE FORMAT:
+For each track, provide:
+- mood_matches: Array of moods this track fits (from the provided sequence)
+- bridge_potential: 0-100 score for how well it bridges between adjacent moods
+- transition_quality: "smooth" | "moderate" | "abrupt"
+- segment_placement: Suggested position in playlist (0=start, 1=end)
+
+Respond ONLY with valid JSON, no markdown.`;
+
+    const trackSummaries = tracks.slice(0, 120).map((t, i) => {
+      const features = t.audioFeatures || {};
+      const moodCat = t.moodCategory || 'unknown';
+      return `${i + 1}. "${t.name}" by ${t.artist} - Mood: ${moodCat}, Energy: ${Math.round((features.energy || 0.5) * 100)}%, Valence: ${Math.round((features.valence || 0.5) * 100)}%, Genres: ${(t.genres || []).slice(0, 2).join(', ')}`;
+    }).join('\n');
+
+    const userPrompt = `Mood sequence: ${moodSequence.map((m, i) => `${i + 1}. ${m}`).join(' → ')}
+
+Tracks available:
+${trackSummaries}
+
+Analyze each track and provide JSON array with this structure:
+[
+  {
+    "trackIndex": 0,
+    "trackName": "Song Name",
+    "mood_matches": ["melancholic", "romantic"],
+    "bridge_potential": 85,
+    "transition_quality": "smooth",
+    "segment_placement": 0.15,
+    "reasoning": "Brief explanation"
+  }
+]`;
+
+    try {
+      const response = await axios.post(
+        `${GEMINI_API_URL}?key=${this.apiKey}`,
+        {
+          contents: [
+            {
+              parts: [
+                { text: systemPrompt },
+                { text: userPrompt }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4000,
+          },
+        }
+      );
+
+      const rawText = response.data.candidates[0].content.parts[0].text;
+      const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const analysis = JSON.parse(jsonText);
+
+      return {
+        moodSequence,
+        trackAnalysis: analysis,
+        totalTracks: tracks.length
+      };
+    } catch (error) {
+      console.error("Gemini mood transition analysis error:", error.message);
+      
+      // Fallback: basic analysis
+      return {
+        moodSequence,
+        trackAnalysis: tracks.slice(0, 120).map((t, i) => ({
+          trackIndex: i,
+          trackName: t.name,
+          mood_matches: [moodSequence[0]],
+          bridge_potential: 50,
+          transition_quality: "moderate",
+          segment_placement: i / tracks.length,
+          reasoning: "Fallback analysis"
+        })),
+        totalTracks: tracks.length
+      };
     }
   }
 }

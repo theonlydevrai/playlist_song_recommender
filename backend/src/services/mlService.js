@@ -394,6 +394,233 @@ class MLService {
 
     return reasons.length > 0 ? reasons.slice(0, 2).join(', ') : 'Fits your vibe';
   }
+
+  async moodTransitionRecommendations(tracks, moodTransitionAnalysis, targetDuration, moodSequence, selectedTrackIds = []) {
+    const { trackAnalysis } = moodTransitionAnalysis;
+    
+    console.log(`Building mood transition playlist: ${moodSequence.join(' → ')}`);
+    console.log(`Target duration: ${Math.round(targetDuration / 60000)} minutes`);
+    console.log(`Selected seed tracks: ${selectedTrackIds.length}`);
+
+    // Map track analysis by index
+    const analysisMap = new Map();
+    trackAnalysis.forEach(ta => {
+      analysisMap.set(ta.trackIndex, ta);
+    });
+
+    // Enrich tracks with transition analysis
+    const enrichedTracks = tracks.map((track, index) => {
+      const analysis = analysisMap.get(index) || {
+        mood_matches: [moodSequence[0]],
+        bridge_potential: 50,
+        segment_placement: index / tracks.length,
+        transition_quality: 'moderate'
+      };
+      
+      return {
+        ...track,
+        moodMatches: analysis.mood_matches || [],
+        bridgePotential: analysis.bridge_potential || 50,
+        segmentPlacement: analysis.segment_placement || 0,
+        transitionQuality: analysis.transition_quality || 'moderate'
+      };
+    });
+
+    // Identify mandatory tracks
+    const mandatoryTracks = enrichedTracks.filter(t => 
+      selectedTrackIds.includes(t.spotifyTrackId)
+    );
+
+    // Calculate segment sizes (natural flow, AI-suggested distribution)
+    const segments = this.calculateSegmentSizes(moodSequence, targetDuration, mandatoryTracks);
+    
+    console.log('Segment distribution:', segments.map(s => `${s.mood}: ${Math.round(s.duration / 60000)}m`).join(', '));
+
+    // Build playlist by segments
+    const selected = [];
+    let totalDuration = 0;
+    const usedTrackIds = new Set();
+    const artistCount = {};
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const isLastSegment = i === segments.length - 1;
+      const nextMood = isLastSegment ? null : segments[i + 1].mood;
+      
+      console.log(`\nBuilding segment ${i + 1}: ${segment.mood} (target: ${Math.round(segment.duration / 60000)}m)`);
+
+      // Get tracks for this segment
+      const segmentTracks = this.getTracksForSegment(
+        enrichedTracks,
+        segment.mood,
+        nextMood,
+        usedTrackIds,
+        artistCount,
+        mandatoryTracks.filter(mt => mt.moodMatches.includes(segment.mood))
+      );
+
+      // Add tracks until segment duration is reached
+      let segmentDuration = 0;
+      const segmentSelected = [];
+
+      for (const track of segmentTracks) {
+        if (usedTrackIds.has(track.spotifyTrackId)) continue;
+        if (segmentDuration >= segment.duration && segmentSelected.length >= 3) break;
+
+        // Artist diversity check
+        const artistKey = (track.artist || 'unknown').toLowerCase();
+        if ((artistCount[artistKey] || 0) >= 3) continue;
+
+        segmentSelected.push(track);
+        usedTrackIds.add(track.spotifyTrackId);
+        segmentDuration += (track.duration_ms || 210000);
+        artistCount[artistKey] = (artistCount[artistKey] || 0) + 1;
+      }
+
+      console.log(`  Added ${segmentSelected.length} tracks (${Math.round(segmentDuration / 60000)}m)`);
+
+      // Format and add to final playlist
+      segmentSelected.forEach(track => {
+        selected.push(this.formatTransitionTrack(track, segment.mood, i));
+        totalDuration += (track.duration_ms || 210000);
+      });
+
+      segment.trackCount = segmentSelected.length;
+      segment.actualDuration = segmentDuration;
+    }
+
+    console.log(`\nFinal playlist: ${selected.length} tracks, ${Math.round(totalDuration / 60000)} minutes`);
+
+    return {
+      tracks: selected,
+      segments: segments.map(s => ({
+        mood: s.mood,
+        targetDuration: s.duration,
+        actualDuration: s.actualDuration,
+        trackCount: s.trackCount
+      })),
+      totalDuration,
+      trackCount: selected.length
+    };
+  }
+
+  calculateSegmentSizes(moodSequence, totalDuration, mandatoryTracks) {
+    const numSegments = moodSequence.length;
+    
+    // AI-suggested distribution with gradual transitions
+    // Early moods get slightly more time for establishment
+    const weights = moodSequence.map((mood, i) => {
+      if (i === 0) return 1.2; // Opening mood gets more time
+      if (i === numSegments - 1) return 1.3; // Closing mood gets most time
+      return 1.0; // Middle moods equal weight
+    });
+
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+    
+    return moodSequence.map((mood, i) => ({
+      mood,
+      duration: Math.round((weights[i] / totalWeight) * totalDuration),
+      index: i
+    }));
+  }
+
+  getTracksForSegment(allTracks, currentMood, nextMood, usedTrackIds, artistCount, mandatoryForSegment) {
+    const segmentTracks = [];
+
+    // 1. Add mandatory tracks for this segment first
+    mandatoryForSegment.forEach(track => {
+      if (!usedTrackIds.has(track.spotifyTrackId)) {
+        segmentTracks.push({
+          ...track,
+          segmentScore: 100,
+          isMandatory: true
+        });
+      }
+    });
+
+    // 2. Score all available tracks for this segment
+    const availableTracks = allTracks
+      .filter(t => !usedTrackIds.has(t.spotifyTrackId))
+      .map(track => {
+        let score = 0;
+
+        // Mood match score (primary)
+        const matchesCurrentMood = (track.moodMatches || []).includes(currentMood);
+        const matchesNextMood = nextMood && (track.moodMatches || []).includes(nextMood);
+
+        if (matchesCurrentMood) score += 60;
+        if (matchesNextMood) score += 20; // Bridge potential
+        if (matchesCurrentMood && matchesNextMood) score += 20; // Perfect bridge
+
+        // Bridge potential bonus
+        score += (track.bridgePotential || 50) * 0.2;
+
+        // Audio feature matching
+        const f = track.audioFeatures;
+        if (f) {
+          const moodTargets = this.getMoodTargets(currentMood);
+          const energyDiff = Math.abs(f.energy - moodTargets.energy);
+          const valenceDiff = Math.abs(f.valence - moodTargets.valence);
+          score -= (energyDiff + valenceDiff) * 15;
+        }
+
+        // Transition quality bonus
+        if (track.transitionQuality === 'smooth') score += 10;
+        else if (track.transitionQuality === 'abrupt') score -= 10;
+
+        return {
+          ...track,
+          segmentScore: Math.max(0, Math.round(score))
+        };
+      });
+
+    // Sort by score
+    availableTracks.sort((a, b) => b.segmentScore - a.segmentScore);
+
+    // Add scored tracks to segment
+    segmentTracks.push(...availableTracks);
+
+    return segmentTracks;
+  }
+
+  getMoodTargets(mood) {
+    const targets = {
+      melancholic: { energy: 0.4, valence: 0.3 },
+      romantic: { energy: 0.5, valence: 0.6 },
+      vibrant: { energy: 0.75, valence: 0.8 },
+      party: { energy: 0.85, valence: 0.75 },
+      happy_energetic: { energy: 0.8, valence: 0.8 },
+      calm_peaceful: { energy: 0.3, valence: 0.6 },
+      party_dance: { energy: 0.85, valence: 0.75 },
+      motivational: { energy: 0.75, valence: 0.7 },
+      chill_ambient: { energy: 0.25, valence: 0.5 },
+      intense_aggressive: { energy: 0.9, valence: 0.4 },
+      euphoric: { energy: 0.85, valence: 0.9 }
+    };
+
+    return targets[mood] || { energy: 0.5, valence: 0.5 };
+  }
+
+  formatTransitionTrack(track, segmentMood, segmentIndex) {
+    return {
+      trackId: track.spotifyTrackId,
+      name: track.name || 'Unknown Track',
+      artist: track.artist || 'Unknown Artist',
+      album: track.album || 'Unknown Album',
+      albumImage: track.albumImage,
+      duration_ms: track.duration_ms || 210000,
+      previewUrl: track.previewUrl,
+      externalUrl: track.externalUrl,
+      segmentMood: segmentMood,
+      segmentIndex: segmentIndex,
+      moodScore: track.segmentScore || 50,
+      bridgePotential: track.bridgePotential || 0,
+      isMandatory: track.isMandatory || false,
+      reason: track.isMandatory 
+        ? 'Your selected track' 
+        : `Fits ${segmentMood} mood${track.bridgePotential > 70 ? ', smooth transition' : ''}`
+    };
+  }
 }
 
 module.exports = new MLService();
