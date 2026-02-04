@@ -173,6 +173,7 @@ router.get('/:id', async (req, res) => {
     imageUrl: playlist.imageUrl,
     owner: playlist.owner,
     totalTracks: playlist.totalTracks,
+    allTracks: playlist.tracks, // Return all tracks for the selection UI
     moodBreakdown,
     processedAt: playlist.processedAt
   });

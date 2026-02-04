@@ -59,7 +59,8 @@ router.post('/', async (req, res) => {
       tracksData,
       moodAnalysis,
       targetDuration,
-      sanitizedMood
+      sanitizedMood,
+      req.body.selectedTrackIds || []
     );
 
     res.json({

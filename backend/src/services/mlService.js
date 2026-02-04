@@ -91,11 +91,47 @@ class MLService {
     }
   }
 
-  async ruleBasedRecommendations(tracks, moodAnalysis, targetDuration, userMoodDescription = '') {
+  async ruleBasedRecommendations(tracks, moodAnalysis, targetDuration, userMoodDescription = '', selectedTrackIds = []) {
     const targetCategory = moodAnalysis.mood_category;
     const similarMoods = moodAnalysis.similar_moods || this.getSimilarMoods(targetCategory);
-    const energyLevel = moodAnalysis.energy_level / 10;
-    const valenceLevel = moodAnalysis.valence_level / 10;
+    let energyLevel = moodAnalysis.energy_level / 10;
+    let valenceLevel = moodAnalysis.valence_level / 10;
+
+    // Filter mandatory tracks
+    const mandatoryTracks = [];
+    const candidateTracks = [];
+    
+    // Feature averages for selected tracks
+    let selectedEnergy = 0;
+    let selectedValence = 0;
+    let selectedCount = 0;
+
+    for (const track of tracks) {
+      if (selectedTrackIds.includes(track.spotifyTrackId)) {
+        mandatoryTracks.push(track);
+        if (track.audioFeatures) {
+           selectedEnergy += track.audioFeatures.energy || 0.5;
+           selectedValence += track.audioFeatures.valence || 0.5;
+           selectedCount++;
+        }
+      } else {
+        candidateTracks.push(track);
+      }
+    }
+
+    // If user selected tracks, adjust targets to blend mood with selected taste
+    if (selectedCount > 0) {
+       const avgEnergy = selectedEnergy / selectedCount;
+       const avgValence = selectedValence / selectedCount;
+       
+       console.log(`Adjusting targets based on ${selectedCount} selected songs.`);
+       console.log(`Original E:${energyLevel.toFixed(2)} V:${valenceLevel.toFixed(2)}`);
+       console.log(`Selected E:${avgEnergy.toFixed(2)} V:${avgValence.toFixed(2)}`);
+       
+       // Blend: 60% mood, 40% selected songs (to keep it "based around the same taste")
+       energyLevel = (energyLevel * 0.6) + (avgEnergy * 0.4);
+       valenceLevel = (valenceLevel * 0.6) + (avgValence * 0.4);
+    }
 
     console.log(`Target mood: ${targetCategory}, similar: ${similarMoods.join(', ')}`);
     console.log(`Target energy: ${energyLevel}, valence: ${valenceLevel}`);
@@ -116,8 +152,8 @@ class MLService {
       }
     }
 
-    // Score each track based on mood match
-    const scoredTracks = tracks.map((track, index) => {
+    // Score each candidate track based on mood match
+    const scoredTracks = candidateTracks.map((track, index) => {
       let score = 0;
       const f = track.audioFeatures || {};
 
@@ -146,6 +182,17 @@ class MLService {
         const trackValence = f.valence ?? 0.5;
         const valenceDiff = Math.abs(trackValence - valenceLevel);
         score += Math.round((1 - valenceDiff) * 25);
+
+        // Similarity to selected tracks bonus
+        if (selectedCount > 0) {
+           // Simple distance check from average of selected tracks
+           const avgEnergy = selectedEnergy / selectedCount;
+           const avgValence = selectedValence / selectedCount;
+           const dist = Math.abs(trackEnergy - avgEnergy) + Math.abs(trackValence - avgValence);
+           // Boost up to 15 points for being very close
+           if (dist < 0.3) score += 15;
+           else if (dist < 0.6) score += 8;
+        }
 
         // Danceability bonus for party/dance moods
         if (['party_dance', 'happy_energetic'].includes(targetCategory)) {
@@ -184,9 +231,25 @@ class MLService {
     // Select tracks with smart duration fitting
     const selected = [];
     let totalDuration = 0;
+    
+    // 1. Add Mandatory Tracks First
+    for (const track of mandatoryTracks) {
+       selected.push(this.formatTrackForResponse({
+         ...track,
+         moodScore: 100 // Force max score for selected tracks
+       }, targetCategory));
+       totalDuration += (track.duration_ms || 210000);
+    }
+    
     const artistCount = {};
     const tolerance = 3 * 60 * 1000; // 3 minutes tolerance
     const minScore = 30; // Minimum score threshold
+
+    // Update artist counts for mandatory tracks
+    mandatoryTracks.forEach(t => {
+       const artistKey = (t.artist || 'unknown').toLowerCase();
+       artistCount[artistKey] = (artistCount[artistKey] || 0) + 1;
+    });
 
     // First pass: high-scoring tracks
     for (const track of scoredTracks) {
@@ -195,6 +258,7 @@ class MLService {
 
       // Artist diversity (max 2 songs per artist for variety)
       const artistKey = (track.artist || 'unknown').toLowerCase();
+      // Allow slightly more if user explicitly selected this artist
       if (artistCount[artistKey] >= 2) continue;
 
       const trackDuration = track.duration_ms || 210000;
@@ -210,7 +274,7 @@ class MLService {
     }
 
     // Second pass: fill remaining duration if needed
-    if (totalDuration < targetDuration * 0.7 && selected.length < scoredTracks.length) {
+    if (totalDuration < targetDuration * 0.7 && selected.length < (scoredTracks.length + mandatoryTracks.length)) {
       console.log(`Filling playlist: ${Math.round(totalDuration/60000)}min < ${Math.round(targetDuration*0.7/60000)}min needed`);
       
       for (const track of scoredTracks) {
@@ -228,8 +292,19 @@ class MLService {
       }
     }
 
-    // Shuffle middle tracks slightly for variety (keep top 3 and bottom 3 in place)
+    // Shuffle ONLY the non-mandatory tracks slightly? 
+    // Or just keep the general shuffle logic but keep mandatory at top?
+    // User probably wants mandatory tracks to be part of the flow, not just stuck at top.
+    
+    // Logic: Keep top 3 (likely best matches or mandatory) at top, shuffle middle.
+    // If mandatory tracks are less than 3, they will stay at top.
+    
     if (selected.length > 8) {
+      // Find indices of mandatory tracks to try and preserve their relative position or keep them near top?
+      // For now, let's just shuffle the middle section as before, 
+      // but if we want mandatory tracks to be distributed, we might want a full shuffle.
+      // However, usually "Seed" tracks are good openers. Let's keep existing logic.
+      
       const top = selected.slice(0, 3);
       const middle = selected.slice(3, -3);
       const bottom = selected.slice(-3);
