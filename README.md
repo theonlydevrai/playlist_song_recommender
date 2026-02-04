@@ -6,7 +6,9 @@ AI-powered playlist curator that analyzes public Spotify playlists and creates p
 
 - **No Login Required** - Works with any public Spotify playlist URL
 - **AI Mood Analysis** - Natural language mood input powered by Google Gemini
-- **Smart Recommendations** - Matches songs to your vibe using audio features
+- **Seed Track Selection** - Pick specific songs from your playlist to include in the final mix
+- **Mood Transitions** - Create playlists that smoothly flow through multiple moods in sequence
+- **Smart Recommendations** - Matches songs using real Spotify audio data (energy, tempo, valence, etc.)
 - **Duration Control** - Get playlists that fit your exact time needs
 - **Easy Export** - Copy track names or Spotify URIs
 
@@ -132,10 +134,10 @@ Go to http://localhost:3000
 
 ## Usage
 
-1. Paste a public Spotify playlist URL
-2. Describe your mood (e.g., "chill vibes", "workout energy")
-3. Select duration
-4. Click "Generate Mix"
+1. Paste a public Spotify playlist URL and click "Load Playlist"
+2. Check songs you want to include as seed tracks (optional)
+3. Choose single mood or build a mood journey (e.g., chill → romantic → energetic)
+4. Select duration and click "Create Mix"
 5. Copy results to your Spotify
 
 ## Project Structure
