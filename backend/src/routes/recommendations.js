@@ -71,7 +71,11 @@ router.post('/', async (req, res) => {
 
     if (isMoodTransition && moodSequence.length > 1) {
       // MOOD TRANSITION MODE
-      const moodTransitionAnalysis = await geminiService.analyzeMoodTransitions(moodSequence, tracksData);
+      const moodTransitionAnalysis = await geminiService.analyzeMoodTransitions(
+        moodSequence, 
+        tracksData,
+        req.body.selectedTrackIds || []
+      );
       
       recommendations = await mlService.moodTransitionRecommendations(
         tracksData,

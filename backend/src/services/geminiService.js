@@ -407,7 +407,7 @@ Respond ONLY with JSON array:
     }
   }
 
-  async analyzeMoodTransitions(moodSequence, tracks) {
+  async analyzeMoodTransitions(moodSequence, tracks, selectedTrackIds = []) {
     const systemPrompt = `You are an expert DJ and music psychologist specializing in creating emotionally intelligent playlist flows.
 
 TASK: Analyze a sequence of moods and determine which tracks can facilitate smooth transitions between them.
@@ -429,6 +429,8 @@ MOOD CATEGORIES:
 - intense_aggressive: Powerful, angry, cathartic
 - vibrant: Lively, colorful, dynamic
 - euphoric: Blissful, ecstatic, transcendent
+- chill: Relaxed, laid-back
+- energetic: High energy, active
 
 RESPONSE FORMAT:
 For each track, provide:
@@ -439,10 +441,22 @@ For each track, provide:
 
 Respond ONLY with valid JSON, no markdown.`;
 
-    const trackSummaries = tracks.slice(0, 120).map((t, i) => {
+    // Prioritize selected tracks for analysis
+    const selectedTracks = tracks.filter(t => selectedTrackIds.includes(t.spotifyTrackId));
+    const otherTracks = tracks.filter(t => !selectedTrackIds.includes(t.spotifyTrackId));
+    
+    // Always include all selected tracks + sample of others (up to 120 total)
+    const tracksToAnalyze = [
+      ...selectedTracks,
+      ...otherTracks.slice(0, Math.max(0, 120 - selectedTracks.length))
+    ];
+    
+    console.log(`🎯 Analyzing ${tracksToAnalyze.length} tracks (${selectedTracks.length} seed tracks prioritized)`);
+
+    const trackSummaries = tracksToAnalyze.map((t, i) => {
       const features = t.audioFeatures || {};
-      const moodCat = t.moodCategory || 'unknown';
-      return `${i + 1}. "${t.name}" by ${t.artist} - Mood: ${moodCat}, Energy: ${Math.round((features.energy || 0.5) * 100)}%, Valence: ${Math.round((features.valence || 0.5) * 100)}%, Genres: ${(t.genres || []).slice(0, 2).join(', ')}`;
+      const isSelected = selectedTrackIds.includes(t.spotifyTrackId);
+      return `${i + 1}. "${t.name}" by ${t.artist}${isSelected ? ' [SEED TRACK]' : ''} - Energy: ${Math.round((features.energy || 0.5) * 100)}%, Valence: ${Math.round((features.valence || 0.5) * 100)}%, Genres: ${(t.genres || []).slice(0, 2).join(', ')}`;
     }).join('\n');
 
     const userPrompt = `Mood sequence: ${moodSequence.map((m, i) => `${i + 1}. ${m}`).join(' → ')}
@@ -455,7 +469,7 @@ Analyze each track and provide JSON array with this structure:
   {
     "trackIndex": 0,
     "trackName": "Song Name",
-    "mood_matches": ["melancholic", "romantic"],
+    "mood_matches": ["chill", "romantic"],
     "bridge_potential": 85,
     "transition_quality": "smooth",
     "segment_placement": 0.15,
@@ -486,9 +500,22 @@ Analyze each track and provide JSON array with this structure:
       const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const analysis = JSON.parse(jsonText);
 
+      // Map analysis back to original track indices
+      const mappedAnalysis = analysis.map(item => {
+        const analyzedTrack = tracksToAnalyze[item.trackIndex];
+        const originalIndex = tracks.findIndex(t => t.spotifyTrackId === analyzedTrack?.spotifyTrackId);
+        return {
+          ...item,
+          trackIndex: originalIndex >= 0 ? originalIndex : item.trackIndex,
+          trackId: analyzedTrack?.spotifyTrackId
+        };
+      });
+
+      console.log(`✅ Successfully analyzed ${mappedAnalysis.length} tracks for mood transitions`);
+
       return {
         moodSequence,
-        trackAnalysis: analysis,
+        trackAnalysis: mappedAnalysis,
         totalTracks: tracks.length
       };
     } catch (error) {

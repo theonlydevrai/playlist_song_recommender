@@ -462,6 +462,7 @@ class MLService {
       // Add tracks until segment duration is reached
       let segmentDuration = 0;
       const segmentSelected = [];
+      let mandatoryCount = 0;
 
       for (const track of segmentTracks) {
         if (usedTrackIds.has(track.spotifyTrackId)) continue;
@@ -475,9 +476,14 @@ class MLService {
         usedTrackIds.add(track.spotifyTrackId);
         segmentDuration += (track.duration_ms || 210000);
         artistCount[artistKey] = (artistCount[artistKey] || 0) + 1;
+        
+        if (track.isMandatory) {
+          mandatoryCount++;
+          console.log(`    ⭐ Seed track "${track.name}" placed in ${segment.mood} (score: ${track.segmentScore}, moods: ${track.moodMatches.join(', ')})`);
+        }
       }
 
-      console.log(`  Added ${segmentSelected.length} tracks (${Math.round(segmentDuration / 60000)}m)`);
+      console.log(`  Added ${segmentSelected.length} tracks (${mandatoryCount} seed tracks, ${Math.round(segmentDuration / 60000)}m)`);
 
       // Format and add to final playlist
       segmentSelected.forEach(track => {
@@ -525,23 +531,11 @@ class MLService {
   }
 
   getTracksForSegment(allTracks, currentMood, nextMood, usedTrackIds, artistCount, mandatoryForSegment) {
-    const segmentTracks = [];
-
-    // 1. Add mandatory tracks for this segment first
-    mandatoryForSegment.forEach(track => {
-      if (!usedTrackIds.has(track.spotifyTrackId)) {
-        segmentTracks.push({
-          ...track,
-          segmentScore: 100,
-          isMandatory: true
-        });
-      }
-    });
-
-    // 2. Score all available tracks for this segment
+    // Score ALL available tracks for this segment (including mandatory ones)
     const availableTracks = allTracks
       .filter(t => !usedTrackIds.has(t.spotifyTrackId))
       .map(track => {
+        const isMandatory = mandatoryForSegment.some(mt => mt.spotifyTrackId === track.spotifyTrackId);
         let score = 0;
 
         // Mood match score (primary)
@@ -551,6 +545,14 @@ class MLService {
         if (matchesCurrentMood) score += 60;
         if (matchesNextMood) score += 20; // Bridge potential
         if (matchesCurrentMood && matchesNextMood) score += 20; // Perfect bridge
+
+        // Mandatory tracks get bonus ONLY if they match the mood
+        if (isMandatory && matchesCurrentMood) {
+          score += 40; // Boost to ensure they're included in this segment
+        } else if (isMandatory && !matchesCurrentMood) {
+          // Don't penalize heavily, but don't boost
+          score += 5; // Small boost to try to include if possible
+        }
 
         // Bridge potential bonus
         score += (track.bridgePotential || 50) * 0.2;
@@ -570,17 +572,15 @@ class MLService {
 
         return {
           ...track,
-          segmentScore: Math.max(0, Math.round(score))
+          segmentScore: Math.max(0, Math.round(score)),
+          isMandatory
         };
       });
 
-    // Sort by score
+    // Sort by score - this naturally distributes mandatory tracks based on fit
     availableTracks.sort((a, b) => b.segmentScore - a.segmentScore);
 
-    // Add scored tracks to segment
-    segmentTracks.push(...availableTracks);
-
-    return segmentTracks;
+    return availableTracks;
   }
 
   getMoodTargets(mood) {
@@ -595,7 +595,9 @@ class MLService {
       motivational: { energy: 0.75, valence: 0.7 },
       chill_ambient: { energy: 0.25, valence: 0.5 },
       intense_aggressive: { energy: 0.9, valence: 0.4 },
-      euphoric: { energy: 0.85, valence: 0.9 }
+      euphoric: { energy: 0.85, valence: 0.9 },
+      chill: { energy: 0.3, valence: 0.6 },
+      energetic: { energy: 0.8, valence: 0.7 }
     };
 
     return targets[mood] || { energy: 0.5, valence: 0.5 };

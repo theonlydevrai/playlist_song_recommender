@@ -19,22 +19,29 @@ class SpotifyService {
       return this.accessToken;
     }
 
-    const params = new URLSearchParams({
-      grant_type: 'client_credentials'
-    });
+    try {
+      const params = new URLSearchParams({
+        grant_type: 'client_credentials'
+      });
 
-    const response = await axios.post(SPOTIFY_TOKEN_URL, params.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
-      }
-    });
+      console.log('🔑 Requesting Spotify access token...');
+      const response = await axios.post(SPOTIFY_TOKEN_URL, params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
+        }
+      });
 
-    this.accessToken = response.data.access_token;
-    // Set expiry 5 minutes before actual expiry for safety
-    this.tokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000;
-
-    return this.accessToken;
+      this.accessToken = response.data.access_token;
+      // Set expiry 5 minutes before actual expiry for safety
+      this.tokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000;
+      
+      console.log('✅ Spotify access token obtained');
+      return this.accessToken;
+    } catch (error) {
+      console.error('❌ Failed to get Spotify access token:', error.response?.data || error.message);
+      throw error;
+    }
   }
 
   async getPlaylist(playlistId) {
@@ -97,10 +104,15 @@ class SpotifyService {
     const trackIds = tracks.map(t => t.spotifyTrackId);
     const artistIds = [...new Set(tracks.map(t => t.artistId).filter(id => id))];
 
+    console.log(`📊 Fetching audio features for ${trackIds.length} tracks...`);
+    
     // 1. Fetch Audio Features (Batch of 100)
+    let audioFeaturesSuccess = 0;
     try {
       for (let i = 0; i < trackIds.length; i += 100) {
         const batch = trackIds.slice(i, i + 100);
+        console.log(`   Requesting audio features for batch ${Math.floor(i/100) + 1} (${batch.length} tracks)...`);
+        
         const response = await axios.get(`${SPOTIFY_API_URL}/audio-features`, {
           headers: { 'Authorization': `Bearer ${token}` },
           params: { ids: batch.join(',') }
@@ -125,15 +137,62 @@ class SpotifyService {
                 time_signature: features.time_signature,
                 _source: 'spotify_api'
               };
+              audioFeaturesSuccess++;
             }
           }
         });
       }
+      console.log(`✅ Got audio features for ${audioFeaturesSuccess}/${trackIds.length} tracks`);
     } catch (error) {
-      console.warn('Failed to fetch audio features:', error.message);
+      console.error('❌ Failed to fetch audio features (batch endpoint):', error.response?.data || error.message);
+      console.log('⚠️  Trying individual track requests as fallback...');
+      
+      // Fallback: Try fetching audio features one by one (slower but might work)
+      try {
+        for (const trackId of trackIds.slice(0, 50)) { // Limit to first 50 to avoid too many requests
+          try {
+            const response = await axios.get(`${SPOTIFY_API_URL}/audio-features/${trackId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.data && response.data.id) {
+              const track = tracks.find(t => t.spotifyTrackId === response.data.id);
+              if (track) {
+                track.audioFeatures = {
+                  energy: response.data.energy,
+                  valence: response.data.valence,
+                  danceability: response.data.danceability,
+                  acousticness: response.data.acousticness,
+                  instrumentalness: response.data.instrumentalness,
+                  tempo: response.data.tempo,
+                  loudness: response.data.loudness,
+                  speechiness: response.data.speechiness,
+                  liveness: response.data.liveness,
+                  key: response.data.key,
+                  mode: response.data.mode,
+                  time_signature: response.data.time_signature,
+                  _source: 'spotify_api_individual'
+                };
+                audioFeaturesSuccess++;
+              }
+            }
+          } catch (individualError) {
+            // Skip this track if individual request fails
+          }
+        }
+        if (audioFeaturesSuccess > 0) {
+          console.log(`✅ Got audio features for ${audioFeaturesSuccess}/${Math.min(trackIds.length, 50)} tracks (via individual requests)`);
+        } else {
+          console.error('❌ Individual requests also failed. Your Spotify app likely needs Extended Quota Mode.');
+          console.error('   Go to https://developer.spotify.com/dashboard and request extension.');
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback method also failed:', fallbackError.message);
+      }
     }
 
     // 2. Fetch Artist Genres (Batch of 50)
+    let genresSuccess = 0;
     try {
       const artistMap = {};
       for (let i = 0; i < artistIds.length; i += 50) {
@@ -151,12 +210,14 @@ class SpotifyService {
       tracks.forEach(track => {
         if (track.artistId && artistMap[track.artistId]) {
           track.genres = artistMap[track.artistId];
+          if (track.genres.length > 0) genresSuccess++;
         } else {
           track.genres = [];
         }
       });
+      console.log(`✅ Got genres for ${genresSuccess}/${tracks.length} tracks`);
     } catch (error) {
-      console.warn('Failed to fetch artist genres:', error.message);
+      console.error('❌ Failed to fetch artist genres:', error.response?.data || error.message);
     }
   }
 
