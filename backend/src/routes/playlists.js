@@ -70,24 +70,28 @@ router.post('/analyze', async (req, res) => {
       const aiMood = trackMoodMap?.[track.spotifyTrackId];
       
       if (aiMood) {
-        // Use AI-analyzed mood data
-        track.audioFeatures = {
-          energy: aiMood.energy,
-          valence: aiMood.valence,
-          danceability: aiMood.danceability,
-          acousticness: 0.3,
-          instrumentalness: 0.1,
-          tempo: 120,
-          _source: 'gemini'
-        };
+        // Set mood category from AI (it considers lyrics/genre/context)
         track.moodCategory = aiMood.category;
-      } else {
-        // Fallback to estimated features
+        
+        // Only overwrite audio features if we don't have real Spotify data
+        if (!track.audioFeatures || track.audioFeatures._source !== 'spotify_api') {
+          track.audioFeatures = {
+            energy: aiMood.energy,
+            valence: aiMood.valence,
+            danceability: aiMood.danceability,
+            acousticness: 0.3,
+            instrumentalness: 0.1,
+            tempo: 120,
+            _source: 'gemini'
+          };
+        }
+      } else if (!track.audioFeatures) {
+        // Fallback to estimated features if no AI and no Spotify data
         track.audioFeatures = spotifyService.estimateAudioFeatures(track);
       }
     }
 
-    // Cluster tracks using ML service
+    // Cluster tracks using ML service (will use existing categories if set)
     const clusterResult = mlService.ruleBasedClustering(tracks);
 
     // Build playlist data object

@@ -35,25 +35,33 @@ class MLService {
       const f = track.audioFeatures;
       if (!f) continue;
 
-      let category = 'calm_peaceful';
+      let category = track.moodCategory;
 
-      if (f.valence > 0.7 && f.energy > 0.7) {
-        category = 'happy_energetic';
-      } else if (f.energy < 0.4 && f.valence > 0.4 && f.valence < 0.7) {
+      if (!category) {
+        // Fallback to rule-based if no AI category set
         category = 'calm_peaceful';
-      } else if (f.valence < 0.4 && f.energy < 0.6) {
-        category = 'melancholic';
-      } else if (f.danceability > 0.7 && f.energy > 0.7) {
-        category = 'party_dance';
-      } else if (f.valence > 0.5 && f.energy < 0.5 && f.acousticness > 0.3) {
-        category = 'romantic';
-      } else if (f.energy > 0.7 && f.valence > 0.5) {
-        category = 'motivational';
-      } else if (f.energy < 0.3 && f.instrumentalness > 0.3) {
-        category = 'chill_ambient';
-      } else if (f.energy > 0.8 && f.valence < 0.4) {
-        category = 'intense_aggressive';
+
+        if (f.valence > 0.7 && f.energy > 0.7) {
+          category = 'happy_energetic';
+        } else if (f.energy < 0.4 && f.valence > 0.4 && f.valence < 0.7) {
+          category = 'calm_peaceful';
+        } else if (f.valence < 0.4 && f.energy < 0.6) {
+          category = 'melancholic';
+        } else if (f.danceability > 0.7 && f.energy > 0.7) {
+          category = 'party_dance';
+        } else if (f.valence > 0.5 && f.energy < 0.5 && f.acousticness > 0.3) {
+          category = 'romantic';
+        } else if (f.energy > 0.7 && f.valence > 0.5) {
+          category = 'motivational';
+        } else if (f.energy < 0.3 && f.instrumentalness > 0.3) {
+          category = 'chill_ambient';
+        } else if (f.energy > 0.8 && f.valence < 0.4) {
+          category = 'intense_aggressive';
+        }
       }
+
+      // Ensure category exists in our map (fallback to calm_peaceful if AI returned something wild)
+      if (!categories[category]) category = 'calm_peaceful';
 
       categories[category].push(track.spotifyTrackId);
       track.moodCategory = category;

@@ -105,7 +105,12 @@ Provide your analysis in this exact JSON format:
     const sample = this.getRandomSample(tracks, sampleSize);
 
     const trackList = sample
-      .map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`)
+      .map((t, i) => {
+        const info = [`${i + 1}. "${t.name}" by ${t.artist}`];
+        if (t.genres && t.genres.length > 0) info.push(`[${t.genres.slice(0, 3).join(', ')}]`);
+        if (t.audioFeatures) info.push(`(E:${t.audioFeatures.energy.toFixed(1)} V:${t.audioFeatures.valence.toFixed(1)})`);
+        return info.join(' ');
+      })
       .join("\n");
 
     const prompt = `You are a music curator creating a personalized playlist.
@@ -115,7 +120,7 @@ DETECTED MOOD CATEGORY: ${moodAnalysis.mood_category}
 TARGET ENERGY: ${moodAnalysis.energy_level}/10
 TARGET VALENCE: ${moodAnalysis.valence_level}/10
 
-AVAILABLE TRACKS:
+AVAILABLE TRACKS (with Genre and Audio Data if available):
 ${trackList}
 
 Your task: Score each track from 0-100 based on how well it matches the user's mood.
@@ -201,27 +206,30 @@ Respond ONLY with a JSON array of objects with track index and score:
       
       // Use index-based identification for reliable mapping
       const trackList = batch
-        .map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`)
+        .map((t, i) => {
+          const info = [`${i + 1}. "${t.name}" by ${t.artist}`];
+          if (t.genres && t.genres.length > 0) info.push(`Genres: ${t.genres.join(', ')}`);
+          if (t.audioFeatures) {
+             info.push(`Audio Data: Energy=${t.audioFeatures.energy.toFixed(2)}, Valence=${t.audioFeatures.valence.toFixed(2)}, Dance=${t.audioFeatures.danceability.toFixed(2)}`);
+          }
+          if (t.popularity) info.push(`Popularity: ${t.popularity}/100`);
+          if (t.releaseDate) info.push(`Year: ${t.releaseDate.split('-')[0]}`);
+          return info.join(' | ');
+        })
         .join("\n");
 
-      const prompt = `You are a music expert with encyclopedic knowledge of songs and artists. Analyze these songs and estimate their emotional characteristics based on your knowledge of the music.
+      const prompt = `You are a music expert with encyclopedic knowledge of songs and artists. Analyze these songs and estimate their emotional characteristics based on your knowledge of the music and the provided metadata.
 
 Songs to analyze:
 ${trackList}
 
-For EACH song, provide your best estimate of:
-- energy (0.0-1.0): Physical intensity (0=very calm, 1=very energetic)
-- valence (0.0-1.0): Emotional tone (0=sad/dark, 1=happy/bright)
-- danceability (0.0-1.0): Rhythm suitability for dancing
-- category: Best fitting mood category
+For EACH song, provide:
+- energy (0.0-1.0): Physical intensity (Use provided Audio Data if available, otherwise estimate)
+- valence (0.0-1.0): Emotional tone (Use provided Audio Data if available, otherwise estimate)
+- danceability (0.0-1.0): Rhythm suitability (Use provided Audio Data if available, otherwise estimate)
+- category: Best fitting mood category (Use genres and audio data to inform this)
 
 Categories: happy_energetic, calm_peaceful, melancholic, party_dance, romantic, motivational, chill_ambient, intense_aggressive
-
-Base your analysis on:
-1. Artist's typical style and genre
-2. Song title implications
-3. Known characteristics of the song if you recognize it
-4. Genre conventions
 
 Respond ONLY with a JSON array using the track index number:
 [{"index": 1, "energy": 0.7, "valence": 0.8, "danceability": 0.6, "category": "happy_energetic"}, ...]`;

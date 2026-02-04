@@ -64,7 +64,8 @@ class SpotifyService {
           spotifyTrackId: item.track.id,
           name: item.track.name,
           artist: item.track.artists.map(a => a.name).join(', '),
-          artistId: item.track.artists[0]?.id,
+          artistId: item.track.artists[0]?.id, // Primary artist ID
+          allArtistIds: item.track.artists.map(a => a.id),
           album: item.track.album.name,
           albumImage: item.track.album.images[0]?.url,
           duration_ms: item.track.duration_ms,
@@ -83,7 +84,80 @@ class SpotifyService {
       url = response.data.next;
     }
 
+    // Enhance tracks with Audio Features and Genres
+    await this.enrichTracksWithFeaturesAndGenres(tracks);
+
     return tracks;
+  }
+
+  async enrichTracksWithFeaturesAndGenres(tracks) {
+    if (tracks.length === 0) return;
+
+    const token = await this.getAccessToken();
+    const trackIds = tracks.map(t => t.spotifyTrackId);
+    const artistIds = [...new Set(tracks.map(t => t.artistId).filter(id => id))];
+
+    // 1. Fetch Audio Features (Batch of 100)
+    try {
+      for (let i = 0; i < trackIds.length; i += 100) {
+        const batch = trackIds.slice(i, i + 100);
+        const response = await axios.get(`${SPOTIFY_API_URL}/audio-features`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: { ids: batch.join(',') }
+        });
+        
+        response.data.audio_features.forEach(features => {
+          if (features) {
+            const track = tracks.find(t => t.spotifyTrackId === features.id);
+            if (track) {
+              track.audioFeatures = {
+                energy: features.energy,
+                valence: features.valence,
+                danceability: features.danceability,
+                acousticness: features.acousticness,
+                instrumentalness: features.instrumentalness,
+                tempo: features.tempo,
+                loudness: features.loudness,
+                speechiness: features.speechiness,
+                liveness: features.liveness,
+                key: features.key,
+                mode: features.mode,
+                time_signature: features.time_signature,
+                _source: 'spotify_api'
+              };
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to fetch audio features:', error.message);
+    }
+
+    // 2. Fetch Artist Genres (Batch of 50)
+    try {
+      const artistMap = {};
+      for (let i = 0; i < artistIds.length; i += 50) {
+        const batch = artistIds.slice(i, i + 50);
+        const response = await axios.get(`${SPOTIFY_API_URL}/artists`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          params: { ids: batch.join(',') }
+        });
+
+        response.data.artists.forEach(artist => {
+          artistMap[artist.id] = artist.genres;
+        });
+      }
+
+      tracks.forEach(track => {
+        if (track.artistId && artistMap[track.artistId]) {
+          track.genres = artistMap[track.artistId];
+        } else {
+          track.genres = [];
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to fetch artist genres:', error.message);
+    }
   }
 
   // Generate estimated audio features based on track metadata
