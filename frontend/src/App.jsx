@@ -344,33 +344,109 @@ export default function App() {
                  </div>
                  <div className="flex-1 overflow-y-auto rounded-xl bg-[#0f0f0f]/50 border border-[#404040]/20">
                    {playlistTracks.map((track, i) => (
-                      <div 
-                        key={track.spotifyTrackId} 
+                      <div
+                        key={track.spotifyTrackId}
                         onClick={() => toggleTrackSelection(track.spotifyTrackId)}
-                        className={`flex items-center gap-4 px-4 py-3 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors cursor-pointer group ${selectedTrackIds.has(track.spotifyTrackId) ? 'bg-[#3b82f6]/5' : ''}`}
+                        className={`flex flex-col gap-3 px-4 py-3 hover:bg-[#141414] border-b border-[#404040]/10 last:border-0 transition-colors cursor-pointer group ${selectedTrackIds.has(track.spotifyTrackId) ? 'bg-[#3b82f6]/5' : ''}`}
                       >
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedTrackIds.has(track.spotifyTrackId) ? 'bg-[#3b82f6] border-[#3b82f6]' : 'border-[#404040] group-hover:border-[#707070]'}`}>
-                           {selectedTrackIds.has(track.spotifyTrackId) && <Check className="w-3.5 h-3.5 text-white" />}
+                        {/* Top Row: Checkbox, Album Art, Track Info */}
+                        <div className="flex items-center gap-4">
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${selectedTrackIds.has(track.spotifyTrackId) ? 'bg-[#3b82f6] border-[#3b82f6]' : 'border-[#404040] group-hover:border-[#707070]'}`}>
+                             {selectedTrackIds.has(track.spotifyTrackId) && <Check className="w-3.5 h-3.5 text-white" />}
+                          </div>
+
+                          {track.albumImage ? (
+                            <img src={track.albumImage} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-[#141414] flex items-center justify-center flex-shrink-0">
+                              <Music2 className="w-5 h-5 text-[#5a5a5a]" />
+                            </div>
+                          )}
+
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium truncate ${selectedTrackIds.has(track.spotifyTrackId) ? 'text-[#3b82f6]' : 'text-[#f5f5f5]'}`}>{track.name}</p>
+                            <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
+                          </div>
                         </div>
-                        
-                        {track.albumImage ? (
-                          <img src={track.albumImage} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-[#141414] flex items-center justify-center">
-                            <Music2 className="w-4 h-4 text-[#5a5a5a]" />
+
+                        {/* Mood Category Badge */}
+                        {track.moodCategory && (
+                          <div className="pl-[52px]">
+                            <span className="inline-block text-xs bg-[#3b82f6]/10 text-[#3b82f6] px-3 py-1 rounded-lg font-medium">
+                              {track.moodCategory.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </span>
                           </div>
                         )}
-                        
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm truncate ${selectedTrackIds.has(track.spotifyTrackId) ? 'text-[#3b82f6] font-medium' : 'text-[#f5f5f5]'}`}>{track.name}</p>
-                          <p className="text-[#5a5a5a] text-xs truncate">{track.artist}</p>
-                        </div>
-                        
-                        {/* Metadata Badges */}
-                        <div className="flex gap-2">
-                           {track.audioFeatures?.energy > 0.7 && <span className="text-[10px] bg-[#FB7185]/10 text-[#FB7185] px-2 py-0.5 rounded">High Energy</span>}
-                           {track.moodCategory && <span className="text-[10px] bg-[#3b82f6]/10 text-[#3b82f6] px-2 py-0.5 rounded">{track.moodCategory.replace('_', ' ')}</span>}
-                        </div>
+
+                        {/* Genres */}
+                        {track.genres && track.genres.length > 0 && (
+                          <div className="pl-[52px] flex flex-wrap gap-1.5">
+                            {track.genres.slice(0, 4).map((genre, idx) => (
+                              <span key={idx} className="text-[10px] bg-[#707070]/10 text-[#9a9a9a] px-2 py-0.5 rounded">
+                                {genre}
+                              </span>
+                            ))}
+                            {track.genres.length > 4 && (
+                              <span className="text-[10px] text-[#5a5a5a] px-1 py-0.5">
+                                +{track.genres.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Audio Features */}
+                        {track.audioFeatures && (
+                          <div className="pl-[52px] grid grid-cols-3 gap-2 text-[10px]">
+                            {track.audioFeatures.energy !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5a5a5a]">Energy:</span>
+                                <span className={`font-medium ${track.audioFeatures.energy > 0.7 ? 'text-[#FB7185]' : track.audioFeatures.energy > 0.4 ? 'text-[#fbbf24]' : 'text-[#60a5fa]'}`}>
+                                  {Math.round(track.audioFeatures.energy * 100)}%
+                                </span>
+                              </div>
+                            )}
+                            {track.audioFeatures.valence !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5a5a5a]">Positivity:</span>
+                                <span className={`font-medium ${track.audioFeatures.valence > 0.7 ? 'text-[#34d399]' : track.audioFeatures.valence > 0.4 ? 'text-[#fbbf24]' : 'text-[#9a9a9a]'}`}>
+                                  {Math.round(track.audioFeatures.valence * 100)}%
+                                </span>
+                              </div>
+                            )}
+                            {track.audioFeatures.danceability !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5a5a5a]">Dance:</span>
+                                <span className={`font-medium ${track.audioFeatures.danceability > 0.7 ? 'text-[#a78bfa]' : 'text-[#9a9a9a]'}`}>
+                                  {Math.round(track.audioFeatures.danceability * 100)}%
+                                </span>
+                              </div>
+                            )}
+                            {track.audioFeatures.acousticness !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5a5a5a]">Acoustic:</span>
+                                <span className={`font-medium ${track.audioFeatures.acousticness > 0.7 ? 'text-[#34d399]' : 'text-[#9a9a9a]'}`}>
+                                  {Math.round(track.audioFeatures.acousticness * 100)}%
+                                </span>
+                              </div>
+                            )}
+                            {track.audioFeatures.tempo !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5a5a5a]">Tempo:</span>
+                                <span className="font-medium text-[#9a9a9a]">
+                                  {Math.round(track.audioFeatures.tempo)} BPM
+                                </span>
+                              </div>
+                            )}
+                            {track.audioFeatures.speechiness !== undefined && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5a5a5a]">Speech:</span>
+                                <span className={`font-medium ${track.audioFeatures.speechiness > 0.66 ? 'text-[#fbbf24]' : 'text-[#9a9a9a]'}`}>
+                                  {Math.round(track.audioFeatures.speechiness * 100)}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                    ))}
                  </div>
