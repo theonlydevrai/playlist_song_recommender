@@ -145,50 +145,8 @@ class SpotifyService {
       console.log(`✅ Got audio features for ${audioFeaturesSuccess}/${trackIds.length} tracks`);
     } catch (error) {
       console.error('❌ Failed to fetch audio features (batch endpoint):', error.response?.data || error.message);
-      console.log('⚠️  Trying individual track requests as fallback...');
-      
-      // Fallback: Try fetching audio features one by one (slower but might work)
-      try {
-        for (const trackId of trackIds.slice(0, 50)) { // Limit to first 50 to avoid too many requests
-          try {
-            const response = await axios.get(`${SPOTIFY_API_URL}/audio-features/${trackId}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (response.data && response.data.id) {
-              const track = tracks.find(t => t.spotifyTrackId === response.data.id);
-              if (track) {
-                track.audioFeatures = {
-                  energy: response.data.energy,
-                  valence: response.data.valence,
-                  danceability: response.data.danceability,
-                  acousticness: response.data.acousticness,
-                  instrumentalness: response.data.instrumentalness,
-                  tempo: response.data.tempo,
-                  loudness: response.data.loudness,
-                  speechiness: response.data.speechiness,
-                  liveness: response.data.liveness,
-                  key: response.data.key,
-                  mode: response.data.mode,
-                  time_signature: response.data.time_signature,
-                  _source: 'spotify_api_individual'
-                };
-                audioFeaturesSuccess++;
-              }
-            }
-          } catch (individualError) {
-            // Skip this track if individual request fails
-          }
-        }
-        if (audioFeaturesSuccess > 0) {
-          console.log(`✅ Got audio features for ${audioFeaturesSuccess}/${Math.min(trackIds.length, 50)} tracks (via individual requests)`);
-        } else {
-          console.error('❌ Individual requests also failed. Your Spotify app likely needs Extended Quota Mode.');
-          console.error('   Go to https://developer.spotify.com/dashboard and request extension.');
-        }
-      } catch (fallbackError) {
-        console.error('❌ Fallback method also failed:', fallbackError.message);
-      }
+      console.log('⚠️  Skipping audio enrichment and continuing with tracks only.');
+      return;
     }
 
     // 2. Fetch Artist Genres (Batch of 50)

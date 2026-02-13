@@ -150,9 +150,12 @@ export default function App() {
   }
 
   const copyToClipboard = (type) => {
-    const text = type === 'names' 
-      ? session.recommendations.map((t, i) => `${i + 1}. ${t.name} - ${t.artist}`).join('\n')
-      : session.recommendations.map(t => `spotify:track:${t.trackId}`).join('\n')
+    const text = type === 'playlistSongs'
+      ? playlistTracks.map(t => `${t.name} - ${t.artist}`).join(', ')
+      : type === 'names'
+        ? session.recommendations.map((t, i) => `${i + 1}. ${t.name} - ${t.artist}`).join('\n')
+        : session.recommendations.map(t => `spotify:track:${t.trackId}`).join('\n')
+    if (!text) return
     navigator.clipboard.writeText(text)
     setCopied(type)
     setTimeout(() => setCopied(null), 2000)
@@ -479,11 +482,20 @@ export default function App() {
             )}
 
             {/* SELECTION VIEW - After playlist loaded */}
-            {playlistLoaded && !showResults && !loading && (
-              <div className="flex flex-col h-full animate-fade-in">
-                 <div className="flex-shrink-0 mb-4 px-2">
-                   <h2 className="text-xl font-semibold text-[#f5f5f5]">Select Songs (Optional)</h2>
-                   <p className="text-[#707070] text-sm">Check songs you absolutely want in the playlist. We'll find similar ones.</p>
+             {playlistLoaded && !showResults && !loading && (
+               <div className="flex flex-col h-full animate-fade-in">
+                 <div className="flex-shrink-0 mb-4 px-2 flex items-start justify-between gap-3">
+                   <div>
+                     <h2 className="text-xl font-semibold text-[#f5f5f5]">Select Songs (Optional)</h2>
+                     <p className="text-[#707070] text-sm">Check songs you absolutely want in the playlist. We'll find similar ones.</p>
+                   </div>
+                   <button
+                     onClick={() => copyToClipboard('playlistSongs')}
+                     className="text-sm px-3 py-2 rounded-lg bg-[#0f0f0f] border border-[#404040]/30 text-[#707070] hover:text-[#f5f5f5] hover:border-[#707070]/50 flex items-center gap-2 transition-colors whitespace-nowrap"
+                   >
+                     {copied === 'playlistSongs' ? <Check className="w-4 h-4 text-[#3b82f6]" /> : <Copy className="w-4 h-4" />}
+                     Copy Playlist Songs
+                   </button>
                  </div>
                  <div className="flex-1 overflow-y-auto rounded-xl bg-[#0f0f0f]/50 border border-[#404040]/20">
                    {playlistTracks.map((track, i) => (
