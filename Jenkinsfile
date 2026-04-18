@@ -78,15 +78,28 @@ pipeline {
 
     stage('SonarQube Analysis') {
       steps {
-        script {
-          try {
-            def scannerHome = tool 'SonarQubeScanner'
-            withSonarQubeEnv('SonarQubeServer') {
-              sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectVersion=${env.BUILD_NUMBER}"
-            }
-          } catch (Exception err) {
-            echo "Skipping SonarQube Analysis: ${err.message}"
-          }
+        withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+          sh '''#!/usr/bin/env bash
+            set -e
+
+            export JAVA_HOME=/opt/java/openjdk
+            export PATH="$JAVA_HOME/bin:$PATH"
+            SONAR_HOST_URL="${SONAR_HOST_URL:-http://172.17.0.1:9000}"
+            SCANNER_ZIP_URL="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip"
+
+            mkdir -p .sonar-tools
+            if [ ! -f .sonar-tools/sonar-scanner/bin/sonar-scanner ]; then
+              curl -fsSL "$SCANNER_ZIP_URL" -o .sonar-tools/sonar-scanner.zip
+              rm -rf .sonar-tools/sonar-scanner-*
+              unzip -q .sonar-tools/sonar-scanner.zip -d .sonar-tools
+              mv .sonar-tools/sonar-scanner-* .sonar-tools/sonar-scanner
+            fi
+
+            .sonar-tools/sonar-scanner/bin/sonar-scanner \
+              -Dsonar.host.url="$SONAR_HOST_URL" \
+              -Dsonar.login="$SONAR_TOKEN" \
+              -Dsonar.projectVersion="${BUILD_NUMBER}"
+          '''
         }
       }
     }
