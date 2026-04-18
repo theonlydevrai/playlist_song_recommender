@@ -83,6 +83,8 @@ npm install
 cd ..
 ```
 
+When running the frontend in WSL, use the dev server script above and open it from Windows at `http://localhost:3000`. The Vite dev server is configured to bind to `0.0.0.0`, so it can be reached from the Windows host browser.
+
 ### Step 5: Setup ML Service
 
 ```bash
@@ -117,7 +119,7 @@ Terminal 2 - ML Service:
 
 ```bash
 cd ml-service
-.\venv\Scripts\Activate.ps1  # or activate.bat / source venv/bin/activate
+source venv/bin/activate
 python app.py
 ```
 
@@ -131,6 +133,8 @@ npm run dev
 ### Step 7: Open the App
 
 Go to http://localhost:3000
+
+If you are on Windows + WSL, `http://localhost:3000` should open in Chrome on the Windows host as long as the dev servers are running in WSL.
 
 ## Usage
 

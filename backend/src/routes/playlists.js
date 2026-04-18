@@ -18,6 +18,65 @@ const sanitizePlaylistUrl = (url) => {
   return null;
 };
 
+const buildDemoTracks = () => {
+  const seeds = [
+    { name: 'City Lights', artist: 'Nova Echo', energy: 0.72, valence: 0.74, danceability: 0.78, acousticness: 0.18, instrumentalness: 0.05 },
+    { name: 'Quiet Orbit', artist: 'Luma Drift', energy: 0.35, valence: 0.62, danceability: 0.40, acousticness: 0.55, instrumentalness: 0.31 },
+    { name: 'Warm Coffee Loops', artist: 'Paper Skies', energy: 0.28, valence: 0.66, danceability: 0.44, acousticness: 0.60, instrumentalness: 0.42 },
+    { name: 'Neon Running', artist: 'Pulse Avenue', energy: 0.86, valence: 0.67, danceability: 0.82, acousticness: 0.10, instrumentalness: 0.02 },
+    { name: 'Sunset Notebook', artist: 'Mira Lane', energy: 0.41, valence: 0.58, danceability: 0.50, acousticness: 0.48, instrumentalness: 0.20 },
+    { name: 'Cloud Memory', artist: 'North Harbour', energy: 0.22, valence: 0.47, danceability: 0.33, acousticness: 0.71, instrumentalness: 0.52 },
+    { name: 'Blue Arcade', artist: 'Static Flora', energy: 0.64, valence: 0.69, danceability: 0.73, acousticness: 0.24, instrumentalness: 0.09 },
+    { name: 'After Midnight Train', artist: 'Velvet Signals', energy: 0.57, valence: 0.36, danceability: 0.55, acousticness: 0.31, instrumentalness: 0.14 },
+    { name: 'Golden Static', artist: 'Rooftop Birds', energy: 0.49, valence: 0.81, danceability: 0.58, acousticness: 0.33, instrumentalness: 0.11 },
+    { name: 'Lakehouse Tempo', artist: 'Comet Parade', energy: 0.68, valence: 0.71, danceability: 0.76, acousticness: 0.21, instrumentalness: 0.06 },
+    { name: 'Inner Compass', artist: 'June Atlas', energy: 0.46, valence: 0.52, danceability: 0.47, acousticness: 0.45, instrumentalness: 0.27 },
+    { name: 'Slow Arcade Rain', artist: 'Echo Harbor', energy: 0.30, valence: 0.43, danceability: 0.36, acousticness: 0.63, instrumentalness: 0.44 }
+  ];
+
+  return seeds.map((seed, idx) => ({
+    spotifyTrackId: `demo-${idx + 1}`,
+    name: seed.name,
+    artist: seed.artist,
+    artistId: `demo-artist-${idx + 1}`,
+    allArtistIds: [`demo-artist-${idx + 1}`],
+    album: 'Demo Session',
+    albumImage: null,
+    duration_ms: 165000 + (idx * 7000),
+    previewUrl: null,
+    externalUrl: null,
+    spotifyUri: `spotify:track:demo-${idx + 1}`,
+    releaseDate: '2024-01-01',
+    popularity: 60,
+    explicit: false,
+    trackNumber: idx + 1,
+    discNumber: 1,
+    genres: ['indie', 'electronic'],
+    moodCategory: null,
+    audioFeatures: {
+      energy: seed.energy,
+      valence: seed.valence,
+      danceability: seed.danceability,
+      acousticness: seed.acousticness,
+      instrumentalness: seed.instrumentalness,
+      tempo: 95 + (idx * 3),
+      loudness: -8 + (idx * 0.2),
+      speechiness: 0.05,
+      liveness: 0.12,
+      key: idx % 12,
+      mode: 1,
+      time_signature: 4,
+      _source: 'demo_fallback'
+    }
+  }));
+};
+
+const isSpotifyPremiumRestriction = (err) => {
+  const status = err?.response?.status;
+  const body = String(err?.response?.data || '').toLowerCase();
+  return status === 403 && body.includes('active premium subscription required');
+};
+
 // Analyze a public playlist
 router.post('/analyze', async (req, res) => {
   const { playlistUrl } = req.body;
@@ -99,6 +158,35 @@ router.post('/analyze', async (req, res) => {
     });
   } catch (err) {
     console.error('Playlist analysis error:', err);
+
+    if (isSpotifyPremiumRestriction(err)) {
+      const playlistId = spotifyService.extractPlaylistId(sanitizedUrl) || `demo-${Date.now()}`;
+      const demoTracks = buildDemoTracks();
+      const playlistData = {
+        id: playlistId,
+        spotifyPlaylistId: playlistId,
+        name: 'Demo Playlist (Spotify Restricted)',
+        description: 'Fallback playlist generated because Spotify API credentials are restricted.',
+        imageUrl: null,
+        owner: 'Demo Mode',
+        totalTracks: demoTracks.length,
+        tracks: demoTracks,
+        processedAt: new Date()
+      };
+
+      playlistCache.set(playlistId, playlistData);
+
+      return res.json({
+        playlistId,
+        name: playlistData.name,
+        description: playlistData.description,
+        imageUrl: playlistData.imageUrl,
+        owner: playlistData.owner,
+        trackCount: demoTracks.length,
+        status: 'demo_fallback',
+        warning: 'Spotify API access is restricted for the configured app owner. Running in demo mode.'
+      });
+    }
     
     // Handle Spotify API errors
     if (err.response?.status === 404) {

@@ -5,11 +5,20 @@ from dotenv import load_dotenv
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+REQUEST_COUNTER = Counter('ml_service_requests_total', 'Total ML service requests', ['method', 'endpoint'])
+
+
+@app.before_request
+def track_requests():
+    if request.path != '/metrics':
+        REQUEST_COUNTER.labels(request.method, request.path).inc()
 
 # Feature weights for mood classification
 FEATURE_WEIGHTS = {
@@ -300,6 +309,11 @@ def generate_reason(track, target_category):
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'service': 'ml-service'})
+
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
 
 
 @app.route('/cluster', methods=['POST'])

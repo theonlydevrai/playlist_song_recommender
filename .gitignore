@@ -53,3 +53,10 @@ coverage/
 # But DO NOT ignore the README.md
 !README.md
 !implementation.md
+!devops.md
+
+# Local/generated deployment artifacts
+.deploy-state/
+frontend-patch.yaml
+demo-test.sh
+generate-run3.sh

@@ -22,4 +22,10 @@ server {
     access_log off;
     return 200 "ok\n";
   }
+
+  location = /metrics {
+    access_log off;
+    default_type text/plain;
+    return 200 "frontend_up 1\n";
+  }
 }

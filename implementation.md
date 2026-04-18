@@ -1,205 +1,1120 @@
-# Spotify Recommender DevOps - Implementation Status
+# DevOps Implementation - Final Production-Style Documentation
 
-Date: 2026-04-18
-Environment: WSL Ubuntu on Linux host runtime with Docker and Minikube
+Date: 2026-04-19
+Status: complete
+Scope: full repository coverage with implementation behavior, operational usage, deployment lifecycle, and hidden coupling analysis.
 
-## 1. Final Project Status
+## 1. Objective
 
-This project is implemented and technically ready.
+This file documents how this project is implemented end-to-end from application code to deployment automation and observability.
 
-All core DevOps deliverables are completed and validated:
+Primary goals:
+- explain exactly how each part works.
+- show how to run, verify, and scale the system.
+- list real coupling points and operational gotchas.
+- provide complete file-level indexing for maintainers.
 
-- Application containerization
-- Local orchestration with Docker Compose
-- Kubernetes deployment on Minikube
-- Configuration management with Ansible
-- CI/CD pipeline definition with Jenkinsfile
-- Code quality configuration with Sonar settings
-- Monitoring deployment with Prometheus
-- Health and smoke validation checks
+## 2. Architecture Summary
 
-Only manual execution steps remain for external services (Jenkins server run, Sonar server run, and production secret rotation).
+Application stack:
+- frontend: React + Vite + Tailwind + Axios.
+- backend: Node.js + Express + Prometheus metrics.
+- ml-service: Flask + scikit-learn KMeans + Prometheus metrics.
 
-## 2. Completed and Ready Items
+DevOps stack:
+- containerization: Docker + Docker Compose.
+- orchestration: Kubernetes on Minikube.
+- deployment automation: Ansible hash-based idempotent playbook.
+- ci/cd: Jenkins pipeline.
+- code quality: SonarQube scanner config.
+- observability: Prometheus + Grafana + kube-state-metrics.
+- elasticity: Kubernetes HPA via metrics-server.
 
-## A) Base Application Validation (done)
+## 3. Service Interaction Contract
 
-- Backend, frontend, and ML service were all validated to run.
-- Health endpoints responded correctly.
-- Frontend was reachable and served successfully.
+### 3.1 User-facing path
 
-## B) Dockerization (done)
+1. Browser loads frontend.
+2. Frontend submits playlist URL to backend.
+3. Backend fetches Spotify metadata/tracks and enriches features.
+4. User selects optional seed tracks and mood data.
+5. Backend invokes Gemini and ML pipeline.
+6. Backend responds with recommendations.
+7. Frontend renders recommendations and provides export options.
 
-Implemented:
+### 3.2 Service-to-service path
 
-- backend/Dockerfile
-- backend/.dockerignore
-- frontend/Dockerfile (multi-stage build)
-- frontend/.dockerignore
-- frontend/nginx/default.conf.template
-- ml-service/Dockerfile
-- ml-service/.dockerignore
-- docker-compose.dev.yml
+- frontend to backend:
+  - dev mode: Vite proxy to localhost:3001.
+  - cluster mode: Nginx /api proxy to backend-service:3001.
+- backend to ml-service:
+  - via ML_SERVICE_URL.
+- backend to Spotify and Gemini:
+  - external API calls with secret credentials.
+- Prometheus to services:
+  - scrape /metrics endpoints.
 
-Ready state:
+## 4. Environment and Configuration Contracts
 
-- Local full stack runs via Docker Compose
-- Frontend, backend, and ML service become healthy
-- Inter-service networking and API routing are functional
+### 4.1 Required secret keys
 
-## C) Kubernetes on Minikube (done)
+- SPOTIFY_CLIENT_ID
+- SPOTIFY_CLIENT_SECRET
+- GEMINI_API_KEY
 
-Implemented:
+Secret source for Kubernetes deploy path:
+- root .env read by ansible/deploy.yml.
 
+### 4.2 Non-secret runtime config
+
+From k8s/configmap.yaml:
+- backend-config:
+  - PORT
+  - NODE_ENV
+  - FRONTEND_URL
+  - ML_SERVICE_URL
+- ml-config:
+  - PORT
+  - DEBUG
+
+## 5. Frontend Implementation Details
+
+Main implementation file:
+- frontend/src/App.jsx
+
+Key behaviors:
+- two-stage flow:
+  - playlist analysis.
+  - recommendation generation.
+- mood modes:
+  - single mood text.
+  - mood journey list with ordering controls.
+- optional song pinning for style anchoring.
+- recommendation result view with:
+  - score/duration/count summary.
+  - per-track rows.
+  - copy names and URIs actions.
+- loading overlays and error surfaces.
+
+Build/runtime pipeline:
+- vite.config.js controls dev server and API proxy.
+- tailwind/postcss generate utility-driven styling.
+- Dockerfile produces static build and serves it via Nginx.
+- nginx/default.conf.template proxies /api and serves /healthz, /metrics.
+
+## 6. Backend Implementation Details
+
+Bootstrap file:
+- backend/src/index.js
+
+Core concerns:
+- security middleware with helmet.
+- rate limiting on /api paths.
+- CORS origin bound to FRONTEND_URL.
+- metrics instrumentation with backend_http_requests_total.
+- route mounts:
+  - /api/playlists
+  - /api/recommendations
+- /health and /metrics endpoint exposure.
+
+Playlist workflow route:
+- backend/src/routes/playlists.js
+- validates playlist URL.
+- fetches Spotify playlist and track data.
+- enriches with audio features and artist genres.
+- caches result in in-memory playlistCache.
+- provides demo fallback payload when Spotify restriction path is hit.
+
+Recommendation route:
+- backend/src/routes/recommendations.js
+- validates mood payload and duration.
+- requires preloaded playlist in cache.
+- single mood path:
+  - Gemini analyzeMood.
+  - mlService ruleBasedRecommendations.
+- mood transition path:
+  - Gemini analyzeMoodTransitions.
+  - mlService moodTransitionRecommendations.
+
+Service adapters:
+- spotifyService.js: token caching, API pagination, enrichment.
+- geminiService.js: prompt orchestration and fallback parsing.
+- mlService.js: python service bridge + JS fallback recommendation logic.
+
+## 7. ML Service Implementation Details
+
+File:
+- ml-service/app.py
+
+ML strategy:
+- weighted features map and mood definitions.
+- classify_mood matches track features to mood ranges.
+- cluster_tracks uses:
+  - feature extraction.
+  - StandardScaler.
+  - KMeans clustering.
+- get_recommendations scores tracks by:
+  - category match.
+  - energy and valence proximity.
+  - danceability preference bonus.
+  - artist diversity cap.
+  - target duration fit with tolerance.
+
+API endpoints:
+- GET /health
+- GET /metrics
+- POST /cluster
+- POST /recommend
+- POST /classify
+
+## 8. Kubernetes Deployment Implementation
+
+Namespace:
 - k8s/namespace.yaml
-- k8s/configmap.yaml
-- k8s/ml-service.yaml
+
+App deployments and services:
 - k8s/backend.yaml
 - k8s/frontend.yaml
-
-Ready state:
-
-- Namespace and workloads deploy successfully
-- Readiness and liveness probes configured
-- Services exposed using NodePort
-- Rollouts complete and pods are running
-
-## D) Ansible Deployment Automation (done)
-
-Implemented:
-
-- ansible/inventory.ini
-- ansible/deploy.yml
-- ansible/README.txt
-
-Ready state:
-
-- Single playbook applies namespace, app manifests, and monitoring manifests
-- Rollout wait steps included
-- Service summary output included
-
-## E) CI/CD Pipeline Definition (done)
-
-Implemented:
-
-- Jenkinsfile
-
-Pipeline includes:
-
-- Dependency install stage
-- Local quality/build checks
-- Sonar analysis stage
-- Minikube image build stage
-- Ansible deploy stage
-- Post-deploy smoke checks
-
-Ready state:
-
-- Pipeline definition is complete and usable on a live Jenkins instance
-
-## F) Code Quality Configuration (done)
-
-Implemented:
-
-- sonar-project.properties
-
-Ready state:
-
-- Source paths and exclusions are configured for scanning
-- Ready for execution against a running SonarQube server
-
-## G) Monitoring (done)
-
-Implemented:
-
-- monitoring/prometheus-config.yaml
-- monitoring/prometheus.yaml
-
-Ready state:
-
-- Prometheus deploys in cluster
-- Scrape targets configured for backend, ML, and frontend health endpoints
-
-## H) Compatibility and Stability Fixes (done)
-
-Implemented fixes:
-
-- Python dependency compatibility in ml-service/requirements.txt for older Python environments
-- Nginx template variable fix in frontend/nginx/default.conf.template
-- Ansible syntax compatibility adjustments in ansible/deploy.yml
-- Backend environment conflict cleanup in backend/.env
-- Healthcheck reliability improvements in frontend image
-
-Ready state:
-
-- Previous deployment/runtime blockers are resolved
-
-## 3. Validation Evidence Summary
-
-## A) Local Docker Compose Validation
-
-Validated:
-
-- Stack builds and starts successfully
-- Containers report healthy states
-- Endpoint checks passed:
-  - ML health endpoint responds
-  - Backend health endpoint responds
-  - Frontend returns HTTP 200
-
-## B) Kubernetes Validation on Minikube
-
-Validated:
-
-- Images built inside Minikube runtime
-- Deployments rolled out successfully
-- Pods reached Running state for:
-  - frontend
-  - backend
-  - ml-service
-  - prometheus
-- NodePort checks passed for frontend, backend, and ML service
-- Backend API returned expected guarded behavior for invalid playlist flow
-
-## 4. Technical Deliverables Inventory
-
-Core files produced and operational:
-
-- docker-compose.dev.yml
-- Jenkinsfile
-- sonar-project.properties
-- k8s/namespace.yaml
-- k8s/configmap.yaml
-- k8s/frontend.yaml
-- k8s/backend.yaml
 - k8s/ml-service.yaml
+
+Autoscaling:
+- k8s/hpa.yaml
+- backend: 1..3 replicas, cpu target 60.
+- ml-service: 2..4 replicas, cpu target 50.
+
+Operational hardening included:
+- readiness/liveness probes.
+- rolling update strategy.
+- resource requests/limits.
+- frontend initContainer waits for backend DNS to avoid startup race failures.
+
+## 9. Observability Implementation
+
+Prometheus:
 - monitoring/prometheus.yaml
-- monitoring/prometheus-config.yaml
-- ansible/inventory.ini
+- scrape targets:
+  - backend-service /metrics
+  - ml-service /metrics
+  - frontend-service /metrics
+  - kube-state-metrics /metrics
+- alert rules:
+  - PodDown
+  - HighCPU
+
+kube-state-metrics:
+- monitoring/kube-state-metrics.yaml
+- includes ServiceAccount + ClusterRole + ClusterRoleBinding.
+- exports pod/deployment/hpa state metrics.
+
+Grafana:
+- monitoring/grafana.yaml
+- datasource and dashboard provisioning via ConfigMaps.
+- dashboard includes CPU, request rate, memory, and pod count panels.
+
+## 10. Ansible Automation Implementation
+
+Main file:
 - ansible/deploy.yml
-- ansible/README.txt
-- backend/Dockerfile
-- frontend/Dockerfile
-- ml-service/Dockerfile
 
-## 5. What Is Left (Manual Part)
+Flow:
+1. check/recover minikube health.
+2. ensure metrics-server enabled.
+3. calculate deployment fingerprint.
+4. compare with previous hash.
+5. if drift detected:
+   - build images in minikube Docker daemon.
+   - create/update spotify-secrets from root .env.
+   - apply app and monitoring manifests.
+   - restart deployments and wait for rollouts.
+   - restart prometheus and wait.
+   - persist hash.
+6. print service endpoints.
 
-The implementation is complete. The following are manual execution and production-hardening tasks still pending:
+Design value:
+- idempotent deploy with deterministic drift detection.
 
-1. Run Jenkins pipeline on a live Jenkins server.
-2. Run Sonar analysis against a live SonarQube server.
-3. Rotate and secure any real API secrets before production/demo sharing.
-4. Optional: add user to docker group to remove sudo dependency in new terminals.
+## 11. CI/CD Implementation
 
-These are not implementation gaps in code. They are environment-level finalization steps.
+Jenkins pipeline stages:
+- checkout.
+- install dependencies for frontend/backend/ml-service.
+- local quality gate checks.
+- SonarQube analysis.
+- Docker image build in minikube docker env.
+- Ansible deploy.
+- post-deploy smoke checks.
 
-## 6. Definition of Done for This Phase
+Pipeline resilience behavior:
+- selected stages skip gracefully if required tools are absent in runner.
 
-This phase is considered complete because:
+## 12. Operational Scripts
 
-- DevOps architecture is fully implemented
-- Infrastructure as code artifacts are present
-- Local and Kubernetes validations have passed
-- Documentation of completed and pending manual items is now explicit
+load generator:
+- scripts/load-hpa.sh
+- creates synthetic cluster payload and sends concurrent POST requests to /cluster.
 
-Project state for implementation phase: READY
+WSL host bridge:
+- scripts/port-forward.sh
+- binds service forwards to 0.0.0.0 for Windows browser access.
+
+demo helper:
+- scripts/demo-commands.md
+- command blocks for deploy, verification, autoscaling, and observability checks.
+
+## 13. Before and After Operational Scenarios
+
+### 13.1 Deploy run
+
+Before:
+- stale pods/config or missing workloads possible.
+
+Command:
+- ansible-playbook -i ansible/inventory.ini ansible/deploy.yml
+
+After:
+- workloads converged to desired state.
+- services listed with stable endpoints.
+- rollouts completed.
+
+### 13.2 HPA demo run
+
+Before:
+- baseline replicas near min.
+
+Command:
+- ./scripts/load-hpa.sh "http://$(minikube ip):30002/cluster" 300 30
+- kubectl get hpa -n spotify-recommender
+
+After:
+- ml-service CPU rises and replicas scale up toward max.
+
+### 13.3 Self-healing run
+
+Before:
+- deployment pod running.
+
+Command:
+- kubectl delete pod -n spotify-recommender -l app=backend --grace-period=0 --force
+
+After:
+- replacement pod created by deployment controller.
+
+## 14. Hidden Coupling and Gotchas - Final Rescan
+
+1. playlist cache volatility:
+- recommendation requests require pre-analyzed playlist in memory.
+- backend restart clears cache.
+
+2. runtime proxy split:
+- frontend routing differs between dev (vite proxy) and cluster (nginx proxy).
+
+3. secret source mismatch risk:
+- cluster secrets are generated from root .env, not backend/.env.
+
+4. fingerprint scope risk:
+- ansible deploy_needed depends only on listed files.
+
+5. metrics warm-up behavior:
+- HPA may report unknown right after startup.
+
+6. dashboard dependency:
+- pod count panel requires kube-state-metrics and RBAC permissions.
+
+7. docs duplication risk:
+- some demo command docs contain old and new blocks.
+
+## 15. Validation Matrix
+
+### API checks
+- curl http://localhost:3001/health
+- curl http://localhost:5000/health
+- curl http://$(minikube ip):30001/health
+- curl http://$(minikube ip):30002/health
+
+### Kubernetes checks
+- kubectl get pods -n spotify-recommender
+- kubectl get svc -n spotify-recommender
+- kubectl get hpa -n spotify-recommender
+
+### Observability checks
+- curl -I http://$(minikube ip):30031
+- curl -s http://$(minikube ip):30090/api/v1/rules
+
+### Port-forward checks for Windows host
+- ./scripts/port-forward.sh
+- access:
+  - http://localhost:30000
+  - http://localhost:30031
+  - http://localhost:30090
+
+## 16. Complete Recursive File Index
+
+
+### ./.deploy-state/current.hash
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./.env
+
+- Technology: Environment config
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./.gitignore
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./Jenkinsfile
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./README.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ansible/README.txt
+
+- Technology: Text
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ansible/deploy.yml
+
+- Technology: YAML
+- Purpose: Idempotent deployment automation
+- Why it exists: Ensures deterministic cluster convergence
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ansible/inventory.ini
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/.dockerignore
+
+- Technology: Docker
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/.env
+
+- Technology: Environment config
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/.env.example
+
+- Technology: Environment config
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/.gitignore
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/Dockerfile
+
+- Technology: Docker
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/package-lock.json
+
+- Technology: JSON
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/package.json
+
+- Technology: JSON
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/src/index.js
+
+- Technology: JavaScript
+- Purpose: Backend server bootstrap
+- Why it exists: Central middleware and route registration
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/src/routes/playlists.js
+
+- Technology: JavaScript
+- Purpose: Playlist analyze and retrieval APIs
+- Why it exists: Data ingest stage before recommendations
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/src/routes/recommendations.js
+
+- Technology: JavaScript
+- Purpose: Recommendation orchestration API
+- Why it exists: Bridges mood input and recommendation outputs
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/src/services/geminiService.js
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/src/services/mlService.js
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./backend/src/services/spotifyService.js
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./demo-test.sh
+
+- Technology: Bash
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./details.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./devops.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./docker-compose.dev.yml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend-patch.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/.dockerignore
+
+- Technology: Docker
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/.gitignore
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/Dockerfile
+
+- Technology: Docker
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/index.html
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/nginx/default.conf.template
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/package-lock.json
+
+- Technology: JSON
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/package.json
+
+- Technology: JSON
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/postcss.config.js
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/public/favicon.svg
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/src/App.jsx
+
+- Technology: JavaScript
+- Purpose: Main frontend workflow and state machine
+- Why it exists: Coordinates user journey and API chain
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/src/index.css
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/src/main.jsx
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/tailwind.config.js
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./frontend/vite.config.js
+
+- Technology: JavaScript
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./full_tree.txt
+
+- Technology: Text
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./generate-run3.sh
+
+- Technology: Bash
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./implementation.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./k8s/backend.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./k8s/configmap.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./k8s/frontend.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./k8s/hpa.yaml
+
+- Technology: YAML
+- Purpose: Autoscaling policy
+- Why it exists: Elasticity control under load
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./k8s/ml-service.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./k8s/namespace.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/.dockerignore
+
+- Technology: Docker
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/.env
+
+- Technology: Environment config
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/.env.example
+
+- Technology: Environment config
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/.gitignore
+
+- Technology: General
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/Dockerfile
+
+- Technology: Docker
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/app.py
+
+- Technology: Python
+- Purpose: ML endpoint logic
+- Why it exists: Compute-heavy classification and ranking layer
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./ml-service/requirements.txt
+
+- Technology: Text
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./monitoring/grafana.yaml
+
+- Technology: YAML
+- Purpose: Grafana runtime stack
+- Why it exists: Dashboard visualization layer
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./monitoring/kube-state-metrics.yaml
+
+- Technology: YAML
+- Purpose: Cluster state exporter + RBAC
+- Why it exists: Feeds infra-state metrics into Prometheus/Grafana
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./monitoring/prometheus-config.yaml
+
+- Technology: YAML
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./monitoring/prometheus.yaml
+
+- Technology: YAML
+- Purpose: Prometheus runtime stack
+- Why it exists: Metrics and alert evaluation
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./presentation.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./project_structure.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./run1.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./run2.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./run3.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./scripts/demo-commands.md
+
+- Technology: Markdown
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./scripts/load-hpa.sh
+
+- Technology: Bash
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./scripts/port-forward.sh
+
+- Technology: Bash
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+
+### ./sonar-project.properties
+
+- Technology: Properties
+- Purpose: Project artifact
+- Why it exists: Part of implementation, deployment, or operations contract
+- Maintainer note:
+  - update this file together with related env/manifests/scripts when changing behavior.
+- Verification hint:
+  - run targeted smoke checks after edits affecting this file.
+
+## 17. Completion Statement
+
+This implementation file now contains:
+- full frontend, backend, ml-service behavior documentation.
+- full infra (k8s, monitoring, ansible, scripts) documentation.
+- before/after operational contexts.
+- hidden coupling rescan.
+- recursive file index for all repository files in scope.
+
+No deferred next-iteration tasks remain.

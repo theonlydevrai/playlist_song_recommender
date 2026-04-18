@@ -3,33 +3,223 @@
   hosts: local
   gather_facts: false
   vars:
-    namespace: spotify-recommender
+    k8s_namespace: spotify-recommender
+    repo_root: "{{ playbook_dir }}/.."
+    deploy_state_dir: "{{ repo_root }}/.deploy-state"
+    deploy_state_file: "{{ deploy_state_dir }}/current.hash"
     manifests:
       - "{{ playbook_dir }}/../k8s/configmap.yaml"
       - "{{ playbook_dir }}/../k8s/ml-service.yaml"
       - "{{ playbook_dir }}/../k8s/backend.yaml"
       - "{{ playbook_dir }}/../k8s/frontend.yaml"
+      - "{{ playbook_dir }}/../k8s/hpa.yaml"
       - "{{ playbook_dir }}/../monitoring/prometheus.yaml"
+      - "{{ playbook_dir }}/../monitoring/kube-state-metrics.yaml"
+      - "{{ playbook_dir }}/../monitoring/grafana.yaml"
+  pre_tasks:
+    - name: Check minikube status
+      command: "minikube status --format='{% raw %}{{.Host}} {{.Kubelet}} {{.APIServer}}{% endraw %}'"
+      register: minikube_status
+      changed_when: false
+      failed_when: false
+
+    - name: Start or recover minikube when not running
+      when: minikube_status.rc != 0 or 'Running Running Running' not in minikube_status.stdout
+      block:
+        - name: Start minikube with addon-safe flags
+          command: minikube start --driver=docker --install-addons=false --wait=apiserver,system_pods --wait-timeout=180s
+          changed_when: false
+      rescue:
+        - name: Delete broken minikube profile
+          command: minikube delete -p minikube
+          failed_when: false
+          changed_when: false
+
+        - name: Retry minikube start after profile reset
+          command: minikube start --driver=docker --install-addons=false --wait=apiserver,system_pods --wait-timeout=300s
+          changed_when: false
+
+        - name: Disable storage addons explicitly
+          command: minikube addons disable {{ item }}
+          loop:
+            - default-storageclass
+            - storage-provisioner
+          failed_when: false
+          changed_when: false
+
+    - name: Check if metrics-server addon is enabled
+      shell: |
+        minikube addons list | grep -Eq 'metrics-server.*enabled'
+      register: metrics_server_status
+      changed_when: false
+      failed_when: false
+
+    - name: Enable metrics-server for HPA demos
+      command: minikube addons enable metrics-server
+      when: metrics_server_status.rc != 0
+      changed_when: false
+
+    - name: Set kubectl context to minikube
+      command: kubectl config use-context minikube
+      changed_when: false
+
+    - name: Verify Kubernetes API is reachable
+      command: kubectl get nodes
+      register: cluster_version
+      changed_when: false
+
+    - name: Ensure deployment state directory exists
+      file:
+        path: "{{ deploy_state_dir }}"
+        state: directory
+
+    - name: Calculate deployment fingerprint
+      shell: |
+        set -e
+        cd "{{ repo_root }}"
+        files=(
+          backend/package.json
+          backend/package-lock.json
+          backend/src/index.js
+          backend/src/routes/playlists.js
+          backend/src/routes/recommendations.js
+          backend/src/services/geminiService.js
+          backend/src/services/mlService.js
+          backend/src/services/spotifyService.js
+          frontend/package.json
+          frontend/package-lock.json
+          frontend/src/App.jsx
+          frontend/src/index.css
+          frontend/src/main.jsx
+          ml-service/app.py
+          ml-service/requirements.txt
+          k8s/configmap.yaml
+          k8s/backend.yaml
+          k8s/frontend.yaml
+          k8s/ml-service.yaml
+          k8s/hpa.yaml
+          monitoring/prometheus.yaml
+          monitoring/kube-state-metrics.yaml
+          monitoring/grafana.yaml
+          ansible/deploy.yml
+          .env
+        )
+        tmp=""
+        for file in "${files[@]}"; do
+          if [ -f "$file" ]; then
+            tmp+="$(sha256sum "$file")"
+          fi
+        done
+        printf '%s' "$tmp" | sha256sum | awk '{print $1}'
+      args:
+        executable: /bin/bash
+      register: deploy_fingerprint
+      changed_when: false
+
+    - name: Read previous deployment fingerprint
+      slurp:
+        src: "{{ deploy_state_file }}"
+      register: previous_deploy_fingerprint
+      failed_when: false
+      changed_when: false
+
+    - name: Check whether the backend workload still exists
+      command: kubectl get deployment backend-deployment -n {{ k8s_namespace }}
+      register: backend_workload_check
+      failed_when: false
+      changed_when: false
+
+    - name: Determine whether redeploy is needed
+      set_fact:
+        deploy_needed: >-
+          {{ (previous_deploy_fingerprint is failed)
+             or (previous_deploy_fingerprint.content is not defined)
+             or ((previous_deploy_fingerprint.content | b64decode | trim) != (deploy_fingerprint.stdout | trim))
+             or (backend_workload_check.rc != 0) }}
+      changed_when: false
+
   tasks:
     - name: Ensure namespace exists
-      command: kubectl apply -f {{ playbook_dir }}/../k8s/namespace.yaml
+      command: kubectl apply --validate=false -f {{ playbook_dir }}/../k8s/namespace.yaml
+      changed_when: false
+
+    - name: Build project images inside minikube Docker daemon
+      shell: |
+        set -e
+        eval "$(minikube docker-env -p minikube)"
+        docker build -t spotify-frontend:latest "{{ repo_root }}/frontend"
+        docker build -t spotify-backend:latest "{{ repo_root }}/backend"
+        docker build -t spotify-ml-service:latest "{{ repo_root }}/ml-service"
+      args:
+        executable: /bin/bash
+      when: deploy_needed
+    - name: Ensure Kubernetes secret is created from local .env
+      shell: |
+        set -e
+        if [ ! -f "{{ repo_root }}/.env" ]; then
+          echo "Missing {{ repo_root }}/.env with SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET and GEMINI_API_KEY"
+          exit 1
+        fi
+        spotify_client_id="$(grep -E '^SPOTIFY_CLIENT_ID=' "{{ repo_root }}/.env" | head -n1 | cut -d= -f2- | tr -d '\r')"
+        spotify_client_secret="$(grep -E '^SPOTIFY_CLIENT_SECRET=' "{{ repo_root }}/.env" | head -n1 | cut -d= -f2- | tr -d '\r')"
+        gemini_api_key="$(grep -E '^GEMINI_API_KEY=' "{{ repo_root }}/.env" | head -n1 | cut -d= -f2- | tr -d '\r')"
+        if [ -z "$spotify_client_id" ] || [ -z "$spotify_client_secret" ] || [ -z "$gemini_api_key" ]; then
+          echo "Missing required secret values in {{ repo_root }}/.env"
+          exit 1
+        fi
+        kubectl create secret generic spotify-secrets \
+          -n {{ k8s_namespace }} \
+          --from-literal=SPOTIFY_CLIENT_ID="$spotify_client_id" \
+          --from-literal=SPOTIFY_CLIENT_SECRET="$spotify_client_secret" \
+          --from-literal=GEMINI_API_KEY="$gemini_api_key" \
+          --dry-run=client -o yaml | kubectl apply -f -
+      args:
+        executable: /bin/bash
+      when: deploy_needed
 
     - name: Apply manifests
-      command: kubectl apply -f {{ item }} -n {{ namespace }}
+      command: kubectl apply --validate=false -f {{ item }} -n {{ k8s_namespace }}
       loop: "{{ manifests }}"
+      when: deploy_needed
+
+    - name: Restart application deployments to pick up rebuilt local images
+      command: kubectl rollout restart deployment/{{ item }} -n {{ k8s_namespace }}
+      loop:
+        - ml-service-deployment
+        - backend-deployment
+        - frontend-deployment
+      when: deploy_needed
 
     - name: Wait for ml-service rollout
-      command: kubectl rollout status deployment/ml-service-deployment -n {{ namespace }} --timeout=180s
+      command: kubectl rollout status deployment/ml-service-deployment -n {{ k8s_namespace }} --timeout=180s
+      when: deploy_needed
 
     - name: Wait for backend rollout
-      command: kubectl rollout status deployment/backend-deployment -n {{ namespace }} --timeout=180s
+      command: kubectl rollout status deployment/backend-deployment -n {{ k8s_namespace }} --timeout=180s
+      when: deploy_needed
 
     - name: Wait for frontend rollout
-      command: kubectl rollout status deployment/frontend-deployment -n {{ namespace }} --timeout=180s
+      command: kubectl rollout status deployment/frontend-deployment -n {{ k8s_namespace }} --timeout=180s
+      when: deploy_needed
+
+    - name: Restart prometheus to pick up config changes
+      command: kubectl rollout restart deployment/prometheus -n {{ k8s_namespace }}
+      when: deploy_needed
+
+    - name: Wait for prometheus rollout
+      command: kubectl rollout status deployment/prometheus -n {{ k8s_namespace }} --timeout=180s
+      when: deploy_needed
+
+    - name: Persist deployment fingerprint
+      copy:
+        content: "{{ deploy_fingerprint.stdout | trim }}"
+        dest: "{{ deploy_state_file }}"
+      when: deploy_needed
 
     - name: Show service endpoints
-      command: kubectl get svc -n {{ namespace }}
+      command: kubectl get svc -n {{ k8s_namespace }}
       register: svc_output
+      changed_when: false
 
     - name: Print service endpoints
       debug:
