@@ -1,0 +1,36 @@
+---
+- name: Deploy Spotify Recommender to Minikube
+  hosts: local
+  gather_facts: false
+  vars:
+    namespace: spotify-recommender
+    manifests:
+      - "{{ playbook_dir }}/../k8s/configmap.yaml"
+      - "{{ playbook_dir }}/../k8s/ml-service.yaml"
+      - "{{ playbook_dir }}/../k8s/backend.yaml"
+      - "{{ playbook_dir }}/../k8s/frontend.yaml"
+      - "{{ playbook_dir }}/../monitoring/prometheus.yaml"
+  tasks:
+    - name: Ensure namespace exists
+      command: kubectl apply -f {{ playbook_dir }}/../k8s/namespace.yaml
+
+    - name: Apply manifests
+      command: kubectl apply -f {{ item }} -n {{ namespace }}
+      loop: "{{ manifests }}"
+
+    - name: Wait for ml-service rollout
+      command: kubectl rollout status deployment/ml-service-deployment -n {{ namespace }} --timeout=180s
+
+    - name: Wait for backend rollout
+      command: kubectl rollout status deployment/backend-deployment -n {{ namespace }} --timeout=180s
+
+    - name: Wait for frontend rollout
+      command: kubectl rollout status deployment/frontend-deployment -n {{ namespace }} --timeout=180s
+
+    - name: Show service endpoints
+      command: kubectl get svc -n {{ namespace }}
+      register: svc_output
+
+    - name: Print service endpoints
+      debug:
+        msg: "{{ svc_output.stdout_lines }}"

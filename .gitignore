@@ -46,3 +46,11 @@ coverage/
 *.tmp
 *.temp
 .cache/
+
+# Ignore all markdown files
+*.md
+
+# But DO NOT ignore the README.md
+!README.md
+!implementation.md
+!manual.md

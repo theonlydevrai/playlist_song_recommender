@@ -1,0 +1,35 @@
+services:
+  ml-service:
+    build:
+      context: ./ml-service
+    container_name: spotify-ml-service
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    container_name: spotify-backend
+    depends_on:
+      - ml-service
+    env_file:
+      - ./backend/.env
+    environment:
+      ML_SERVICE_URL: http://ml-service:5000
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: spotify-frontend
+    depends_on:
+      - backend
+    environment:
+      BACKEND_UPSTREAM: backend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
